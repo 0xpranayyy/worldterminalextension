@@ -1,0 +1,12 @@
+{
+  "name": "world-terminal-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Chrome extension for world.xyz: liquidity scanner, opportunities, alerts.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "icons": "node scripts/make-icons.mjs",
+    "package": "rm -f world-terminal.zip && zip -r world-terminal.zip manifest.json src icons -x '*.DS_Store'"
+  }
+}

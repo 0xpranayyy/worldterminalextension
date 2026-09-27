@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>World Terminal</title>
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">World<span>Terminal</span></div>
+      <div class="top-actions">
+        <span id="plan" class="plan"></span>
+        <button id="refresh" class="icon-btn" title="Refresh now">↻</button>
+        <button id="panel" class="icon-btn" title="Open in side panel">⇱</button>
+      </div>
+    </header>
+
+    <div id="status" class="status"></div>
+
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="scanner" class="active">Markets</button>
+      <button role="tab" data-tab="opps">Opportunities</button>
+      <button role="tab" data-tab="watch">Watchlist</button>
+      <button role="tab" data-tab="unlock" id="unlock-tab">Unlock</button>
+    </nav>
+
+    <main>
+      <section id="tab-scanner" class="tab active">
+        <div class="controls">
+          <input id="search" type="search" placeholder="Search markets…" />
+          <select id="sort">
+            <option value="liquidity">Best liquidity</option>
+            <option value="spread">Tightest spread</option>
+            <option value="volume">Most volume</option>
+            <option value="openInterest">Open interest</option>
+            <option value="closing">Closing soon</option>
+          </select>
+          <select id="category"><option value="">All</option></select>
+        </div>
+        <div id="scanner-list" class="list"></div>
+        <div id="scanner-gate"></div>
+      </section>
+
+      <section id="tab-opps" class="tab">
+        <div class="seg" id="opp-seg">
+          <button data-opp="underround" class="active">Arb: outcomes</button>
+          <button data-opp="complement">Arb: YES+NO</button>
+          <button data-opp="favorites">Closing favorites</button>
+          <button data-opp="movers">Movers</button>
+        </div>
+        <p id="opp-help" class="help"></p>
+        <div id="opp-list" class="list"></div>
+      </section>
+
+      <section id="tab-watch" class="tab">
+        <div id="watch-list" class="list"></div>
+        <h3 class="sub">Price alerts</h3>
+        <div id="alert-list" class="list"></div>
+      </section>
+
+      <section id="tab-unlock" class="tab">
+        <div id="unlock-body"></div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      Not affiliated with World. Not financial advice. Links to world.xyz include our invite code.
+    </footer>
+
+    <dialog id="alert-dialog">
+      <form method="dialog" id="alert-form">
+        <h3 id="alert-title">New alert</h3>
+        <div class="row">
+          <select name="side"><option>YES</option><option>NO</option></select>
+          <select name="op"><option value="below">ask ≤</option><option value="above">ask ≥</option></select>
+          <input name="price" type="number" min="1" max="99" step="1" required placeholder="¢" />
+        </div>
+        <div class="row end">
+          <button value="cancel" formnovalidate class="ghost">Cancel</button>
+          <button value="ok" class="primary">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,31 @@
+.wt-panel {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483000;
+  width: 320px;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 12px;
+  background: #0d0f12;
+  color: #e8eaed;
+  border: 1px solid #262a31;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  font: 12px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.wt-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.wt-brand { font-weight: 700; letter-spacing: 0.02em; }
+.wt-close { background: none; border: 0; color: #8a919c; font-size: 18px; cursor: pointer; line-height: 1; }
+.wt-muted { color: #8a919c; margin: 4px 0 10px; }
+.wt-cta {
+  width: 100%; padding: 8px; border: 0; border-radius: 8px;
+  background: #e8eaed; color: #0d0f12; font-weight: 600; cursor: pointer;
+}
+.wt-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.wt-table th { text-align: right; color: #8a919c; font-weight: 500; padding: 4px; }
+.wt-table th:first-child, .wt-table td.wt-name { text-align: left; }
+.wt-table td { text-align: right; padding: 4px; border-top: 1px solid #1c1f25; }
+.wt-name { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt-good { color: #3ecf8e; }
+.wt-bad { color: #f06a6a; }

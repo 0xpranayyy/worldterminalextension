@@ -13,6 +13,13 @@ export const CONFIG = {
 
   // Re-check a user's referral status after this many hours.
   REVERIFY_HOURS: 24,
+
+  // Optional v1 backend (see backend/README.md), e.g. "https://world-terminal-api.you.workers.dev".
+  // When set, market data and Pro status come from the backend, and the extension falls back to
+  // loading World directly if the backend has no data. Also add its origin to manifest.json:
+  //   "host_permissions": [..., "https://<backend>/*"],
+  //   "externally_connectable": { "matches": ["https://<backend>/*"] }
+  BACKEND_URL: "",
 };
 
 // User-adjustable in Settings. Stored under `settings` in chrome.storage.local.

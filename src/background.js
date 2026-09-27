@@ -74,6 +74,36 @@ function refresh() {
 }
 
 async function doRefresh() {
+  if (CONFIG.BACKEND_URL) {
+    const served = await refreshFromBackend().catch(() => false);
+    if (served) return;
+  }
+  return refreshDirect();
+}
+
+// v1: one shared poller on the backend. Returns false when the backend can't serve data yet,
+// so the caller falls back to loading World directly.
+async function refreshFromBackend() {
+  const { session } = await store.get("session");
+  const token = session && session.exp * 1000 > Date.now() ? session.token : null;
+  const res = await fetch(`${CONFIG.BACKEND_URL}/v1/feed`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    cache: "no-store",
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) return false;
+  const feed = await res.json();
+  if (!feed.rows?.length) return false;
+  if (session) {
+    const { unlock } = await store.get("unlock");
+    const pro = feed.plan === "pro";
+    if (!unlock || unlock.ok !== pro) await store.set({ unlock: { wallet: session.wallet, ok: pro, via: "backend", verifiedAt: Date.now() } });
+  }
+  await commit(feed.rows, feed.opportunities, { ...feed.status, total: feed.total, source: "backend" });
+  return true;
+}
+
+async function refreshDirect() {
   const token = await getToken();
   if (!token) {
     await store.set({ status: { state: "auth", message: new AuthRequiredError().message, at: Date.now() } });
@@ -85,14 +115,8 @@ async function doRefresh() {
     const events = await fetchActiveEvents(token);
     const now = Date.now();
     const rows = flattenMarkets(events, now);
-
-    const { snapshots = [], alerts = [] } = await store.get(["snapshots", "alerts"]);
-    const kept = snapshots.filter((s) => now - s.t <= SNAPSHOT_KEEP_MS);
-    const base = [...kept].reverse().find((s) => now - s.t >= MOVER_LOOKBACK_MS) || kept[0];
-    if (!kept.length || now - kept[kept.length - 1].t >= SNAPSHOT_EVERY_MS) {
-      kept.push({ t: now, mids: snapshotMids(rows) });
-    }
-
+    const { snapshots = [] } = await store.get("snapshots");
+    const base = [...snapshots].reverse().find((s) => now - s.t >= MOVER_LOOKBACK_MS) || snapshots[0];
     const minEdge = settings.minEdgeCents / 100;
     const opportunities = {
       underround: findUnderround(events, { minEdge }).slice(0, 50),
@@ -104,35 +128,40 @@ async function doRefresh() {
       movers: base ? findMovers(rows, base.mids, { minMove: settings.moverCents / 100 }).slice(0, 50) : [],
       moversSince: base ? base.t : null,
     };
-
-    const unlocked = await isUnlocked();
-    const fired = evaluateAlerts(alerts, rows);
-    if (fired.length) {
-      const firedIds = new Set(fired.map((f) => f.alert.id));
-      await store.set({ alerts: alerts.filter((a) => !firedIds.has(a.id)) });
-      if (settings.notifyAlerts) for (const f of fired) notifyAlert(f);
-    }
-    if (unlocked && settings.notifySignals) await notifyNewSignals(opportunities);
-
-    await store.set({
-      rows,
-      opportunities,
-      snapshots: kept,
-      status: {
-        state: "ok",
-        at: now,
-        tookMs: now - started,
-        events: events.length,
-        markets: rows.length,
-        medianSpread: median(rows.map((r) => r.spread)),
-        tightMarkets: rows.filter((r) => r.spread !== null && r.spread <= 0.03).length,
-      },
+    await commit(rows, opportunities, {
+      state: "ok",
+      at: now,
+      tookMs: now - started,
+      events: events.length,
+      markets: rows.length,
+      total: rows.length,
+      source: "direct",
+      medianSpread: median(rows.map((r) => r.spread)),
+      tightMarkets: rows.filter((r) => r.spread !== null && r.spread <= 0.03).length,
     });
   } catch (err) {
     const auth = err instanceof AuthRequiredError;
     if (auth) await chrome.storage.local.remove("auth");
     await store.set({ status: { state: auth ? "auth" : "error", message: err.message, at: Date.now() } });
   }
+}
+
+// Shared tail of both refresh paths: local price history, alerts, notifications, storage.
+async function commit(rows, opportunities, status) {
+  const now = Date.now();
+  const settings = await getSettings();
+  const { snapshots = [], alerts = [] } = await store.get(["snapshots", "alerts"]);
+  const kept = snapshots.filter((s) => now - s.t <= SNAPSHOT_KEEP_MS);
+  if (!kept.length || now - kept[kept.length - 1].t >= SNAPSHOT_EVERY_MS) kept.push({ t: now, mids: snapshotMids(rows) });
+
+  const fired = evaluateAlerts(alerts, rows);
+  if (fired.length) {
+    const firedIds = new Set(fired.map((f) => f.alert.id));
+    await store.set({ alerts: alerts.filter((a) => !firedIds.has(a.id)) });
+    if (settings.notifyAlerts) for (const f of fired) notifyAlert(f);
+  }
+  if ((await isUnlocked()) && settings.notifySignals) await notifyNewSignals(opportunities);
+  await store.set({ rows, opportunities, snapshots: kept, status });
 }
 
 // ---------- Notifications & badge ----------
@@ -151,7 +180,7 @@ async function notifyNewSignals(opps) {
   const { notified = {} } = await store.get("notified");
   const now = Date.now();
   for (const k of Object.keys(notified)) if (now - notified[k] > NOTIFIED_KEEP_MS) delete notified[k];
-  const fresh = [...opps.underround, ...opps.complement].filter((o) => !notified[`${o.type}:${o.eventTicker}:${o.ticker || ""}`]);
+  const fresh = [...opps.underround, ...opps.complement].filter((o) => !o.redacted && !notified[`${o.type}:${o.eventTicker}:${o.ticker || ""}`]);
   for (const o of fresh.slice(0, 3)) {
     notified[`${o.type}:${o.eventTicker}:${o.ticker || ""}`] = now;
     chrome.notifications.create(`signal:${o.type}:${o.eventTicker}`, {
@@ -190,7 +219,7 @@ function matchesReferrer(referredBy) {
   if (!referredBy) return false;
   const v = String(referredBy).trim();
   const code = normalizeCode(CONFIG.REFERRAL_CODE);
-  return (code && v.toUpperCase() === code) || (CONFIG.REFERRER_WALLET && v === CONFIG.REFERRER_WALLET.trim());
+  return Boolean((code && v.toUpperCase() === code) || (CONFIG.REFERRER_WALLET && v === CONFIG.REFERRER_WALLET.trim()));
 }
 
 async function verifyWallet(wallet) {
@@ -218,7 +247,8 @@ async function verifyWallet(wallet) {
 
 async function maybeReverify() {
   const { unlock } = await store.get("unlock");
-  if (unlock?.ok && Date.now() - unlock.verifiedAt > CONFIG.REVERIFY_HOURS * 3600 * 1000) {
+  // Backend unlocks are re-checked by the server on every /v1/feed call.
+  if (unlock?.ok && unlock.via !== "backend" && Date.now() - unlock.verifiedAt > CONFIG.REVERIFY_HOURS * 3600 * 1000) {
     // verifyWallet only rewrites `unlock` when World answers, so outages don't relock anyone.
     await verifyWallet(unlock.wallet);
   }
@@ -248,8 +278,17 @@ const handlers = {
     return { unlocked: !!unlock?.ok, unlock: unlock || null };
   },
   async signOut() {
-    await chrome.storage.local.remove(["unlock"]);
+    await chrome.storage.local.remove(["unlock", "session"]);
+    refresh().catch(() => {});
     return { ok: true };
+  },
+  async connectUrl() {
+    if (!CONFIG.BACKEND_URL) return { ok: false };
+    const token = await getToken();
+    const url = new URL("/connect", CONFIG.BACKEND_URL);
+    url.searchParams.set("ext", chrome.runtime.id);
+    if (token) url.hash = `wt=${encodeURIComponent(token)}`;
+    return { ok: true, url: url.toString(), connected: !!token };
   },
   async addAlert({ alert }) {
     const { alerts = [] } = await store.get("alerts");
@@ -282,6 +321,22 @@ const handlers = {
     return { invite: inviteUrl("/") };
   },
 };
+
+// The backend's /connect page hands over a signed session after the wallet signature.
+chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
+  if (!CONFIG.BACKEND_URL || sender.origin !== new URL(CONFIG.BACKEND_URL).origin || msg?.type !== "backendSession") return false;
+  if (typeof msg.token !== "string" || typeof msg.wallet !== "string" || typeof msg.exp !== "number") return false;
+  store
+    .set({
+      session: { token: msg.token, wallet: msg.wallet, exp: msg.exp },
+      unlock: { wallet: msg.wallet, ok: !!msg.pro, referredBy: msg.referredBy ?? null, via: "backend", verifiedAt: Date.now() },
+    })
+    .then(() => {
+      refresh().catch(() => {});
+      sendResponse({ ok: true });
+    });
+  return true;
+});
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const h = handlers[msg?.type];

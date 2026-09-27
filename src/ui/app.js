@@ -131,7 +131,7 @@ function renderLive() {
   if (!state.loaded) return el.replaceChildren(h("span", { class: "dot off" }), "Loading…");
   if (!s || s.state === "auth") return el.replaceChildren(h("span", { class: "dot warn" }), "Not connected to World");
   if (s.state === "error") return el.replaceChildren(h("span", { class: "dot warn" }), `Update failed · retrying · last good ${ago(state.rowsAt)}`);
-  el.replaceChildren(h("span", { class: "dot" }), h("b", {}, "Live"), ` · updated ${ago(s.at)} · ${s.events} events`);
+  el.replaceChildren(h("span", { class: "dot" }), h("b", {}, "Live"), ` · updated ${ago(s.at)} · ${s.events} events${s.source === "backend" ? " · cloud" : ""}`);
 }
 
 function renderKpis() {
@@ -297,14 +297,17 @@ function renderMarkets(view) {
   }
   const limit = state.unlocked ? 300 : CONFIG.FREE_ROW_LIMIT;
   rows = rows.slice(0, limit);
+  // With the backend, free users only receive the top rows; the full count comes from status.total.
+  const hidden = Math.max(total, state.status?.total || 0) - rows.length;
   view.append(
-    h("div", { class: "section-label" }, h("span", {}, `${compact(total)} markets`), h("span", {}, $("#sort").selectedOptions[0]?.textContent || "")),
+    h("div", { class: "section-label" }, h("span", {}, `${compact(Math.max(total, state.status?.total || 0))} markets`), h("span", {}, $("#sort").selectedOptions[0]?.textContent || "")),
     ...rows.map(marketRow),
   );
-  if (!state.unlocked && total > rows.length) {
+  if (!state.unlocked && hidden > 0 && !state.query && state.chip === "all") {
+    const preview = filteredRows().slice(limit, limit + 3);
     view.append(
-      h("div", { class: "blur" }, ...filteredRows().slice(limit, limit + 3).map((r, i) => marketRow(r, limit + i))),
-      gate(`${compact(total - rows.length)} more markets`, "Pro shows every market on World, ranked live."),
+      preview.length ? h("div", { class: "blur" }, ...preview.map((r, i) => marketRow(r, limit + i))) : null,
+      gate(`${compact(hidden)} more markets`, "Pro shows every market on World, ranked live."),
     );
   }
 }
@@ -341,6 +344,14 @@ function renderSignalChips() {
 }
 
 function signalCard(o) {
+  if (o.redacted) {
+    return h(
+      "div",
+      { class: "scard" },
+      h("div", { class: "edge" }, h("b", {}, "+?¢"), h("small", {}, "Pro")),
+      h("div", {}, h("div", { class: "s-title" }, "Pro signal"), h("div", { class: "s-line" }, "Unlock to see this opportunity")),
+    );
+  }
   let edge, line;
   if (o.type === "underround") {
     edge = h("div", { class: "edge" }, h("b", {}, `+${cents1(o.edge)}`), h("small", {}, `${o.returnPct}%`));
@@ -665,6 +676,24 @@ function unlockSheet() {
     ];
   }
   const msg = h("div", { class: "msg" });
+  const signIn = h(
+    "button",
+    {
+      class: "btn primary",
+      onclick: async () => {
+        const res = await send({ type: "connectUrl" });
+        if (!res?.ok) return;
+        if (!res.connected) {
+          msg.className = "msg warn";
+          msg.textContent = "Open world.xyz once first so World Terminal can check your invite.";
+          return;
+        }
+        chrome.tabs.create({ url: res.url });
+      },
+    },
+    "Sign in with wallet",
+    icon("external"),
+  );
   const input = h("input", { type: "text", id: "wallet", placeholder: "Solana wallet address", value: state.unlock?.wallet || "", spellcheck: "false", autocomplete: "off" });
   const verify = h(
     "button",
@@ -722,7 +751,9 @@ function unlockSheet() {
         "div",
         { class: "step" },
         h("div", { class: "step-n" }, "3"),
-        h("div", {}, h("h4", {}, "Verify your wallet"), h("p", {}, "Paste the wallet you used on World."), h("div", { class: "row" }, input, verify), msg),
+        CONFIG.BACKEND_URL
+          ? h("div", {}, h("h4", {}, "Sign in with your wallet"), h("p", {}, "Sign a free message with the wallet you used on World. Pro turns on automatically."), h("div", { class: "row" }, signIn), msg)
+          : h("div", {}, h("h4", {}, "Verify your wallet"), h("p", {}, "Paste the wallet you used on World."), h("div", { class: "row" }, input, verify), msg),
       ),
     ),
     h("p", { class: "fineprint" }, "World allows one invite per wallet. Wallets that joined with another invite can't unlock Pro."),

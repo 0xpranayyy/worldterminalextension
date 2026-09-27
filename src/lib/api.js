@@ -24,7 +24,7 @@ async function getJson(url, token, init = {}) {
 const PAGE = 40;
 const MAX_PAGES = 25;
 
-export async function fetchActiveEvents(token) {
+export async function fetchActiveEvents(token, base = MARKETS_API) {
   const events = [];
   let cursor = 0;
   for (let page = 0; page < MAX_PAGES; page++) {
@@ -34,7 +34,7 @@ export async function fetchActiveEvents(token) {
       limit: String(PAGE),
       cursor: String(cursor),
     });
-    const data = await getJson(`${MARKETS_API}/events?${q}`, token);
+    const data = await getJson(`${base}/events?${q}`, token);
     const batch = data.events || [];
     events.push(...batch);
     if (batch.length < PAGE || data.cursor == null) break;
@@ -46,6 +46,6 @@ export async function fetchActiveEvents(token) {
 }
 
 // -> { code, referredCount, referredBy }
-export function fetchReferralStatus(wallet, token) {
-  return getJson(`${USERS_API}/users/${encodeURIComponent(wallet)}/referral`, token);
+export function fetchReferralStatus(wallet, token, base = USERS_API) {
+  return getJson(`${base}/users/${encodeURIComponent(wallet)}/referral`, token);
 }

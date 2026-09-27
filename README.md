@@ -26,6 +26,10 @@ Also: a welcome page on install, side panel mode, keyboard shortcuts (`Alt+W` op
 
 Every "Trade on World" link opens `https://world.xyz/event/<ticker>?ref=<YOUR_CODE>`.
 
+## v1 backend (optional)
+
+[`backend/`](backend/) is a Cloudflare Worker with one shared market poller, wallet sign-in, and Pro gating enforced on the server. Set `BACKEND_URL` in `src/config.js` to use it. The extension falls back to loading World directly whenever the backend has no data. It needs official feed access to poll markets; see [backend/README.md](backend/README.md).
+
 ## Publishing
 
 1. Set `REFERRAL_CODE` in `src/config.js` and test with live World data and a real wallet.

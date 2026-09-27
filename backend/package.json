@@ -1,0 +1,18 @@
+{
+  "name": "world-terminal-api",
+  "version": "1.0.0",
+  "description": "World Terminal backend: shared market poller, wallet sign-in, server-side Pro gating.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 migrations apply world-terminal --remote",
+    "db:migrate:local": "wrangler d1 migrations apply world-terminal --local",
+    "test": "node test/e2e.mjs",
+    "test:extension": "node test/extension-e2e.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.142.0"
+  },
+  "private": true,
+  "type": "module"
+}

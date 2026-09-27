@@ -1,0 +1,34 @@
+name = "world-terminal-api"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+# Poll the upstream market feed every minute.
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+# Your World invite code and (optionally) wallet. Pro = wallet whose referredBy matches either.
+REFERRAL_CODE = ""
+REFERRER_WALLET = ""
+FREE_ROW_LIMIT = "10"
+# Market feed in World's /events format. Needs official access (World partner API or DFlow
+# prediction-markets API key) set as the UPSTREAM_TOKEN secret. Empty = poller stays idle.
+UPSTREAM_URL = ""
+USERS_API_URL = "https://users-api.world.xyz/api/v1"
+# Extension origins allowed to receive sessions from /connect (chrome-extension://<id>), comma-separated.
+EXTENSION_IDS = ""
+
+# Secrets (set with `wrangler secret put NAME`):
+#   SESSION_SECRET   random 32+ byte string used to sign session tokens (required)
+#   UPSTREAM_TOKEN   bearer token for UPSTREAM_URL (optional)
+#   USERS_API_TOKEN  bearer token for USERS_API_URL; without it the user's own World session is used
+
+[[d1_databases]]
+binding = "DB"
+database_name = "world-terminal"
+database_id = "REPLACE_WITH_D1_ID"
+migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "REPLACE_WITH_KV_ID"

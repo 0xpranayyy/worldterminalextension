@@ -2,18 +2,36 @@
 
 A market terminal for [World](https://world.xyz), the Solana prediction market. It shows which markets are liquid, flags pricing opportunities, and sends price alerts. **Pro features unlock for free when a user joins World through your invite link.**
 
+![Markets](store/screenshots/01-markets.png)
+![Market detail](store/screenshots/02-detail.png)
+![Signals](store/screenshots/03-signals.png)
+
+_Screenshots use sample data (`scripts/sample-data.mjs`), not live World prices._
+
 ## Features
 
 | | Free | Pro (joined via your invite) |
 |---|---|---|
-| Market scanner: liquidity score, spread, volume, open interest, time to close | Top 10 | All markets |
-| Sort by liquidity, spread, volume, OI, closing soon, and filter by category/search | ✓ | ✓ |
-| Opportunities: multi-outcome arbitrage, YES+NO arbitrage, closing favorites, movers | Count only | ✓ |
-| Watchlist | | ✓ |
-| Price alerts (desktop notifications) | | ✓ |
-| Stats overlay on world.xyz event pages | Unlock prompt | ✓ |
+| Live header: markets tracked, median spread, signal count | ✓ | ✓ |
+| Market scanner: liquidity score ring, YES price, bid/ask, spread, volume, closing time | Top 10 | All markets |
+| Sort (liquidity, spread, volume, OI, closing) · category and quick filters · search | ✓ | ✓ |
+| Market detail: 12h price chart, YES/NO book, stats, score breakdown | ✓ | ✓ |
+| Signals: outcome arbitrage, YES+NO arbitrage, closing favorites, movers | Blurred count | ✓ |
+| Watchlist and YES/NO price alerts (desktop notifications) | | ✓ |
+| New-arbitrage notifications and toolbar badge count | | ✓ |
+| Stats panel on world.xyz event pages | Unlock prompt | ✓ |
+| Settings: refresh rate, notifications, signal thresholds | ✓ | ✓ |
+
+Also: a welcome page on install, side panel mode, keyboard shortcuts (`Alt+W` opens it, `/` search, `↑↓` + `Enter`, `R` refresh, `Esc` close).
 
 Every "Trade on World" link opens `https://world.xyz/event/<ticker>?ref=<YOUR_CODE>`.
+
+## Publishing
+
+1. Set `REFERRAL_CODE` in `src/config.js` and test with live World data and a real wallet.
+2. `npm run package` builds `world-terminal.zip`.
+3. In the [Chrome Web Store dashboard](https://chrome.google.com/webstore/devconsole) ($5 one-time account), upload the zip and paste the fields from [`store/listing.md`](store/listing.md).
+4. Use the 1280×800 images in `store/screenshots/` and host [`PRIVACY.md`](PRIVACY.md) for the privacy policy URL.
 
 ## Setup
 
@@ -29,9 +47,10 @@ Every "Trade on World" link opens `https://world.xyz/event/<ticker>?ref=<YOUR_CO
 Other commands:
 
 ```
-npm test          # unit tests for the analytics engine
-npm run icons     # regenerate icons/
-npm run package   # build world-terminal.zip for the Chrome Web Store
+npm test              # unit tests for the analytics engine
+npm run screenshots   # load the extension with sample data, capture every screen + store images
+npm run icons         # regenerate icons/
+npm run package       # build world-terminal.zip for the Chrome Web Store
 ```
 
 ## System design
@@ -92,14 +111,18 @@ The extension's Unlock tab walks users through these steps and then checks `refe
 ## Project layout
 
 ```
-manifest.json            MV3 manifest
-src/config.js            invite code, polling interval, API bases
-src/background.js        polling, alerts, unlock verification, message handlers
-src/lib/api.js           World API client
-src/lib/analytics.js     liquidity score + opportunity finders (pure, unit tested)
-src/content/world.js     token bridge + event page overlay
-src/ui/app.*             popup / side panel UI
-test/                    node:test suite
+manifest.json              MV3 manifest
+src/config.js              invite code, default settings, API bases
+src/background.js          polling, signals, alerts, badge, unlock verification
+src/lib/api.js             World API client
+src/lib/analytics.js       liquidity score, opportunity finders, history (pure, unit tested)
+src/content/world.js       token bridge + stats panel on world.xyz event pages
+src/ui/theme.css           shared design tokens
+src/ui/app.*               popup / side panel (markets, signals, watchlist, sheets)
+src/ui/welcome.*           first-run onboarding page
+scripts/                   icons, sample data, screenshot generator
+store/                     Chrome Web Store listing text and screenshots
+test/                      node:test suite
 ```
 
 *Not affiliated with World. Nothing here is financial advice.*

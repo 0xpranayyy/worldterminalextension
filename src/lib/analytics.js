@@ -27,11 +27,35 @@ function logNorm(x, max) {
 
 // Liquidity score 0–100 from spread tightness, traded volume and open interest.
 // A 10¢+ spread scores zero for tightness; volume/OI saturate at 1M contracts.
-export function liquidityScore({ spread, volume24h, volume, openInterest }) {
-  const tight = spread === null ? 0 : clamp01(1 - spread / 0.1);
-  const vol = logNorm(volume24h || volume || 0, 1e6);
-  const oi = logNorm(openInterest || 0, 1e6);
-  return Math.round(100 * (0.45 * tight + 0.3 * vol + 0.25 * oi));
+export const SCORE_WEIGHTS = { tight: 0.45, vol: 0.3, oi: 0.25 };
+
+export function scoreParts({ spread, volume24h, volume, openInterest }) {
+  return {
+    tight: spread === null || spread === undefined ? 0 : clamp01(1 - spread / 0.1),
+    vol: logNorm(volume24h || volume || 0, 1e6),
+    oi: logNorm(openInterest || 0, 1e6),
+  };
+}
+
+export function liquidityScore(row) {
+  const p = scoreParts(row);
+  return Math.round(100 * (SCORE_WEIGHTS.tight * p.tight + SCORE_WEIGHTS.vol * p.vol + SCORE_WEIGHTS.oi * p.oi));
+}
+
+export function median(values) {
+  const v = values.filter((x) => typeof x === "number" && Number.isFinite(x)).sort((a, b) => a - b);
+  if (!v.length) return null;
+  const m = v.length >> 1;
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+}
+
+// Mid-price series for one ticker from stored snapshots: [{t, mid}]
+export function historyFor(ticker, snapshots, current) {
+  const pts = (snapshots || [])
+    .filter((s) => typeof s.mids?.[ticker] === "number")
+    .map((s) => ({ t: s.t, mid: s.mids[ticker] }));
+  if (current && typeof current.mid === "number") pts.push({ t: current.t, mid: current.mid });
+  return pts;
 }
 
 export function flattenMarkets(events, now = Date.now()) {
@@ -85,6 +109,11 @@ export const SORTS = {
 
 // ---------- Opportunities ----------
 
+// "Event — Outcome", or just the event title when the market is the whole event.
+export function marketLabel(r) {
+  return !r.title || r.title === r.eventTitle ? r.eventTitle : `${r.eventTitle} — ${r.title}`;
+}
+
 // Multi-outcome events (e.g. "Who wins the World Cup?") where buying YES on every outcome
 // costs less than the guaranteed $1 payout. Only valid when outcomes are mutually exclusive
 // and exhaustive — World does not expose that flag, so we surface it with a "check rules" note.
@@ -123,7 +152,7 @@ export function findComplementArb(rows, { minEdge = 0.003 } = {}) {
       type: "complement",
       ticker: r.ticker,
       eventTicker: r.eventTicker,
-      title: `${r.eventTitle} — ${r.title}`,
+      title: marketLabel(r),
       cost: +cost.toFixed(4),
       edge: +(1 - cost).toFixed(4),
       returnPct: +(((1 - cost) / cost) * 100).toFixed(2),
@@ -147,7 +176,7 @@ export function findNearExpiryFavorites(rows, { minPrice = 0.85, maxPrice = 0.98
         type: "favorite",
         ticker: r.ticker,
         eventTicker: r.eventTicker,
-        title: `${r.eventTitle} — ${r.title}`,
+        title: marketLabel(r),
         side,
         price: ask,
         hoursToClose: +r.hoursToClose.toFixed(1),
@@ -171,7 +200,7 @@ export function findMovers(rows, previousMids, { minMove = 0.05 } = {}) {
       type: "mover",
       ticker: r.ticker,
       eventTicker: r.eventTicker,
-      title: `${r.eventTitle} — ${r.title}`,
+      title: marketLabel(r),
       from: previousMids[r.ticker],
       to: r.mid,
       move: +move.toFixed(4),

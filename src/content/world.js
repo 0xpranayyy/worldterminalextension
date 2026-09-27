@@ -37,6 +37,9 @@
     return n;
   }
 
+  const LOGO =
+    '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="12" cy="12" rx="4" ry="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 12h18" stroke="currentColor" stroke-width="2"/></svg>';
+
   async function render() {
     const ticker = eventTickerFromPath();
     if (!ticker) {
@@ -46,50 +49,64 @@
       return;
     }
     currentEvent = ticker;
-    const [{ rows = [] }, state] = await Promise.all([
-      chrome.storage.local.get("rows"),
+    const [{ rows = [], wtOverlayCollapsed = false }, state] = await Promise.all([
+      chrome.storage.local.get(["rows", "wtOverlayCollapsed"]),
       chrome.runtime.sendMessage({ type: "unlockState" }).catch(() => ({ unlocked: false })),
     ]);
     if (currentEvent !== ticker) return;
+    const mine = rows.filter((r) => r.eventTicker === ticker).sort((a, b) => b.score - a.score);
 
     panel?.remove();
-    panel = el("div", "wt-panel");
-    const head = el("div", "wt-head");
-    head.append(el("span", "wt-brand", "World Terminal"));
-    const close = el("button", "wt-close", "×");
-    close.title = "Hide";
-    close.onclick = () => panel.remove();
-    head.append(close);
+    panel = el("div", `wt-panel${wtOverlayCollapsed ? " wt-collapsed" : ""}`);
+    const head = el("button", "wt-head");
+    head.title = wtOverlayCollapsed ? "Expand" : "Collapse";
+    const brand = el("span", "wt-brand");
+    brand.innerHTML = LOGO;
+    brand.append(el("span", "", "World Terminal"));
+    head.append(brand);
+    if (state.unlocked && mine.length) {
+      const best = mine[0];
+      head.append(el("span", `wt-pill ${best.score >= 65 ? "wt-good" : best.score < 35 ? "wt-bad" : ""}`, `Liq ${best.score}`));
+    } else if (!state.unlocked) head.append(el("span", "wt-pill wt-gold", "PRO"));
+    head.append(el("span", "wt-caret", wtOverlayCollapsed ? "▴" : "▾"));
+    head.onclick = () => chrome.storage.local.set({ wtOverlayCollapsed: !wtOverlayCollapsed });
     panel.append(head);
 
+    const body = el("div", "wt-body");
     if (!state.unlocked) {
-      panel.append(el("p", "wt-muted", "Unlock spread, liquidity score and alerts for this market."));
-      const btn = el("button", "wt-cta", "Unlock World Terminal");
+      body.append(el("p", "wt-muted", "See spread, liquidity score and set alerts for every outcome on this page."));
+      const btn = el("button", "wt-cta", "Unlock Pro, free");
       btn.onclick = () => chrome.runtime.sendMessage({ type: "openSidePanel" });
-      panel.append(btn);
+      body.append(btn);
+    } else if (!mine.length) {
+      body.append(el("p", "wt-muted", "No live quotes for this event yet."));
     } else {
-      const mine = rows.filter((r) => r.eventTicker === ticker).sort((a, b) => b.score - a.score);
-      if (!mine.length) {
-        panel.append(el("p", "wt-muted", "No live quotes for this event yet."));
-      } else {
-        const table = el("table", "wt-table");
-        const hr = el("tr");
-        for (const h of ["Outcome", "Bid", "Ask", "Spread", "Liq"]) hr.append(el("th", "", h));
-        table.append(hr);
-        for (const r of mine.slice(0, 12)) {
-          const tr = el("tr");
-          tr.append(
-            el("td", "wt-name", r.title),
-            el("td", "", cents(r.yesBid)),
-            el("td", "", cents(r.yesAsk)),
-            el("td", r.spread !== null && r.spread <= 0.03 ? "wt-good" : "", cents(r.spread)),
-            el("td", r.score >= 60 ? "wt-good" : r.score < 30 ? "wt-bad" : "", String(r.score)),
-          );
-          table.append(tr);
-        }
-        panel.append(table);
+      const table = el("table", "wt-table");
+      const hr = el("tr");
+      for (const h of ["Outcome", "YES", "Spread", "Liq"]) hr.append(el("th", "", h));
+      table.append(hr);
+      for (const r of mine.slice(0, 12)) {
+        const tr = el("tr");
+        const liq = el("td", "wt-liq");
+        const bar = el("span", "wt-bar");
+        const fill = el("span", r.score >= 65 ? "wt-fill-good" : r.score < 35 ? "wt-fill-bad" : "wt-fill");
+        fill.style.width = `${r.score}%`;
+        bar.append(fill);
+        liq.append(bar, el("span", "wt-n", String(r.score)));
+        tr.append(
+          el("td", "wt-name", r.title),
+          el("td", "wt-n", cents(r.yesAsk)),
+          el("td", `wt-n ${r.spread !== null && r.spread <= 0.03 ? "wt-good" : r.spread >= 0.08 ? "wt-bad" : ""}`, cents(r.spread)),
+          liq,
+        );
+        table.append(tr);
       }
+      body.append(table);
+      const open = el("button", "wt-link", "Open in World Terminal →");
+      open.onclick = () => chrome.runtime.sendMessage({ type: "openSidePanel" });
+      body.append(open);
     }
+    panel.append(body);
     document.body.append(panel);
   }
 
@@ -105,6 +122,6 @@
   tick();
   setInterval(tick, 1500);
   chrome.storage.onChanged.addListener((changes) => {
-    if ((changes.rows || changes.unlock) && eventTickerFromPath()) render().catch(() => {});
+    if ((changes.rows || changes.unlock || changes.wtOverlayCollapsed) && eventTickerFromPath()) render().catch(() => {});
   });
 })();

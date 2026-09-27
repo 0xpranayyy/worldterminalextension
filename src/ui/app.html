@@ -4,84 +4,66 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>World Terminal</title>
+    <link rel="stylesheet" href="theme.css" />
     <link rel="stylesheet" href="app.css" />
   </head>
   <body>
-    <header class="top">
-      <div class="brand">World<span>Terminal</span></div>
-      <div class="top-actions">
-        <span id="plan" class="plan"></span>
-        <button id="refresh" class="icon-btn" title="Refresh now">↻</button>
-        <button id="panel" class="icon-btn" title="Open in side panel">⇱</button>
+    <div class="app" id="app">
+      <header class="hdr">
+        <div class="brand">
+          <svg class="logo" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8" />
+            <ellipse cx="12" cy="12" rx="4" ry="9" fill="none" stroke="currentColor" stroke-width="1.8" />
+            <path d="M3 12h18" stroke="currentColor" stroke-width="1.8" />
+          </svg>
+          <span class="brand-name">World Terminal</span>
+          <span id="plan"></span>
+        </div>
+        <div class="hdr-actions">
+          <button class="icon-btn" id="btn-refresh" title="Refresh now (R)" aria-label="Refresh now"></button>
+          <button class="icon-btn" id="btn-panel" title="Open in side panel" aria-label="Open in side panel"></button>
+          <button class="icon-btn" id="btn-settings" title="Settings" aria-label="Settings"></button>
+        </div>
+      </header>
+
+      <div class="live" id="live"></div>
+
+      <div class="kpis" id="kpis"></div>
+
+      <div id="banner"></div>
+
+      <nav class="tabs" role="tablist" id="tabs">
+        <button role="tab" data-tab="markets">Markets</button>
+        <button role="tab" data-tab="signals">Signals <span class="count" id="count-signals"></span></button>
+        <button role="tab" data-tab="watch">Watchlist <span class="count" id="count-watch"></span></button>
+        <span class="tab-ink" id="tab-ink"></span>
+      </nav>
+
+      <div class="toolbar" id="toolbar-markets">
+        <div class="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16 16l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <input id="search" type="search" placeholder="Search markets" autocomplete="off" />
+          <kbd>/</kbd>
+        </div>
+        <select id="sort" aria-label="Sort">
+          <option value="liquidity">Liquidity</option>
+          <option value="spread">Tightest spread</option>
+          <option value="volume">Volume</option>
+          <option value="openInterest">Open interest</option>
+          <option value="closing">Closing soon</option>
+        </select>
       </div>
-    </header>
+      <div class="chips" id="chips"></div>
+      <div class="chips" id="signal-chips" hidden></div>
 
-    <div id="status" class="status"></div>
+      <main class="scroll" id="scroll">
+        <div id="view"></div>
+      </main>
+    </div>
 
-    <nav class="tabs" role="tablist">
-      <button role="tab" data-tab="scanner" class="active">Markets</button>
-      <button role="tab" data-tab="opps">Opportunities</button>
-      <button role="tab" data-tab="watch">Watchlist</button>
-      <button role="tab" data-tab="unlock" id="unlock-tab">Unlock</button>
-    </nav>
-
-    <main>
-      <section id="tab-scanner" class="tab active">
-        <div class="controls">
-          <input id="search" type="search" placeholder="Search markets…" />
-          <select id="sort">
-            <option value="liquidity">Best liquidity</option>
-            <option value="spread">Tightest spread</option>
-            <option value="volume">Most volume</option>
-            <option value="openInterest">Open interest</option>
-            <option value="closing">Closing soon</option>
-          </select>
-          <select id="category"><option value="">All</option></select>
-        </div>
-        <div id="scanner-list" class="list"></div>
-        <div id="scanner-gate"></div>
-      </section>
-
-      <section id="tab-opps" class="tab">
-        <div class="seg" id="opp-seg">
-          <button data-opp="underround" class="active">Arb: outcomes</button>
-          <button data-opp="complement">Arb: YES+NO</button>
-          <button data-opp="favorites">Closing favorites</button>
-          <button data-opp="movers">Movers</button>
-        </div>
-        <p id="opp-help" class="help"></p>
-        <div id="opp-list" class="list"></div>
-      </section>
-
-      <section id="tab-watch" class="tab">
-        <div id="watch-list" class="list"></div>
-        <h3 class="sub">Price alerts</h3>
-        <div id="alert-list" class="list"></div>
-      </section>
-
-      <section id="tab-unlock" class="tab">
-        <div id="unlock-body"></div>
-      </section>
-    </main>
-
-    <footer class="foot">
-      Not affiliated with World. Not financial advice. Links to world.xyz include our invite code.
-    </footer>
-
-    <dialog id="alert-dialog">
-      <form method="dialog" id="alert-form">
-        <h3 id="alert-title">New alert</h3>
-        <div class="row">
-          <select name="side"><option>YES</option><option>NO</option></select>
-          <select name="op"><option value="below">ask ≤</option><option value="above">ask ≥</option></select>
-          <input name="price" type="number" min="1" max="99" step="1" required placeholder="¢" />
-        </div>
-        <div class="row end">
-          <button value="cancel" formnovalidate class="ghost">Cancel</button>
-          <button value="ok" class="primary">Save</button>
-        </div>
-      </form>
-    </dialog>
+    <div class="sheet-backdrop" id="backdrop" hidden></div>
+    <section class="sheet" id="sheet" role="dialog" aria-modal="true" hidden></section>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script type="module" src="app.js"></script>
   </body>

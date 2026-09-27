@@ -11,11 +11,19 @@ export const CONFIG = {
   // Free (locked) users see only this many rows in the scanner.
   FREE_ROW_LIMIT: 10,
 
-  // How often the background worker refreshes market data, in minutes (Chrome minimum is 0.5).
-  POLL_MINUTES: 1,
-
   // Re-check a user's referral status after this many hours.
   REVERIFY_HOURS: 24,
+};
+
+// User-adjustable in Settings. Stored under `settings` in chrome.storage.local.
+export const DEFAULT_SETTINGS = {
+  refreshMinutes: 1,
+  notifyAlerts: true,
+  notifySignals: false,
+  minEdgeCents: 0.5,
+  favoriteMinCents: 85,
+  favoriteMaxHours: 48,
+  moverCents: 5,
 };
 
 export const WORLD_ORIGIN = "https://world.xyz";

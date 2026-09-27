@@ -10,6 +10,10 @@ import {
   findMovers,
   evaluateAlerts,
   SORTS,
+  median,
+  historyFor,
+  marketLabel,
+  scoreParts,
 } from "../src/lib/analytics.js";
 
 const NOW = Date.UTC(2026, 8, 27, 12);
@@ -110,4 +114,26 @@ test("evaluateAlerts fires on threshold crossings", () => {
 test("liquidity sort puts the deepest market first", () => {
   const rows = flattenMarkets(events, NOW).sort(SORTS.liquidity);
   assert.equal(rows[0].ticker, "BTC-100K-Y");
+});
+
+test("median ignores nulls and averages even-length input", () => {
+  assert.equal(median([0.03, null, 0.01, 0.02]), 0.02);
+  assert.equal(median([0.01, 0.03]), 0.02);
+  assert.equal(median([]), null);
+});
+
+test("historyFor returns a ticker's mids in order plus the live point", () => {
+  const snaps = [{ t: 1, mids: { A: 0.4 } }, { t: 2, mids: { B: 0.1 } }, { t: 3, mids: { A: 0.45 } }];
+  assert.deepEqual(historyFor("A", snaps, { t: 4, mid: 0.5 }).map((p) => p.mid), [0.4, 0.45, 0.5]);
+});
+
+test("marketLabel avoids repeating single-market event titles", () => {
+  assert.equal(marketLabel({ eventTitle: "BTC above 100k?", title: "BTC above 100k?" }), "BTC above 100k?");
+  assert.equal(marketLabel({ eventTitle: "Chiefs vs Bills", title: "Chiefs" }), "Chiefs vs Bills — Chiefs");
+});
+
+test("scoreParts exposes the components of the liquidity score", () => {
+  const p = scoreParts({ spread: 0.05, volume: 0, openInterest: 0 });
+  assert.equal(p.tight, 0.5);
+  assert.equal(p.vol, 0);
 });

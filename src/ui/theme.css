@@ -1,0 +1,91 @@
+/* Shared design tokens for every World Terminal page. */
+:root {
+  --bg: #0a0b0d;
+  --bg-2: #0e1013;
+  --surface: #13151a;
+  --surface-2: #191c22;
+  --hover: #1e2229;
+  --line: rgba(255, 255, 255, 0.065);
+  --line-2: rgba(255, 255, 255, 0.11);
+  --text: #edeff2;
+  --text-2: #a3aab4;
+  --text-3: #6a727e;
+  --accent: #7c9cff;
+  --accent-2: #a9bcff;
+  --accent-soft: rgba(124, 156, 255, 0.12);
+  --yes: #3dd68c;
+  --yes-soft: rgba(61, 214, 140, 0.12);
+  --no: #ff6b6b;
+  --no-soft: rgba(255, 107, 107, 0.12);
+  --warn: #e0a43b;
+  --warn-soft: rgba(224, 164, 59, 0.12);
+  --gold-1: #f5e2a8;
+  --gold-2: #c9a45c;
+  --gold: linear-gradient(135deg, var(--gold-1), var(--gold-2));
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 12px 32px rgba(0, 0, 0, 0.35);
+  --font: "Inter", "SF Pro Text", -apple-system, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --mono: "SF Mono", "JetBrains Mono", "Cascadia Mono", ui-monospace, Menlo, Consolas, monospace;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.45 var(--font);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01";
+}
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: var(--accent-2); }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.yes { color: var(--yes); }
+.no { color: var(--no); }
+.warn { color: var(--warn); }
+.muted { color: var(--text-2); }
+.faint { color: var(--text-3); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 34px; padding: 0 14px; border-radius: 9px; border: 1px solid var(--line-2);
+  background: var(--surface-2); color: var(--text); font-weight: 600; font-size: 12.5px;
+  text-decoration: none; white-space: nowrap; transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.btn:hover { background: var(--hover); border-color: rgba(255, 255, 255, 0.16); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.55; cursor: default; }
+.btn.primary { background: var(--text); color: #0a0b0d; border-color: transparent; }
+.btn.primary:hover { background: #fff; }
+.btn.gold { background: var(--gold); color: #1d1606; border-color: transparent; }
+.btn.gold:hover { filter: brightness(1.05); }
+.btn.ghost { background: transparent; }
+.btn.block { width: 100%; }
+.btn.lg { height: 42px; font-size: 14px; border-radius: 11px; }
+.btn svg { width: 15px; height: 15px; }
+
+.pro-chip {
+  display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px;
+  font: 700 10px/1 var(--font); letter-spacing: 0.08em; background: var(--gold); color: #1d1606;
+}
+.free-chip {
+  display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px;
+  font: 600 10px/1 var(--font); letter-spacing: 0.08em; border: 1px solid var(--line-2); color: var(--text-2);
+}
+
+input[type="text"], input[type="search"], input[type="number"], select {
+  height: 34px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--line-2);
+  background: var(--bg-2); outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+}
+input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+select { appearance: none; padding-right: 26px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23a3aab4' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

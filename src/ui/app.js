@@ -45,6 +45,9 @@ const state = {
   selected: -1,
   sheet: null, // {type: "market"|"unlock"|"settings"|"share", ...}
   portfolio: { loading: false, data: null, error: null },
+  moves: {}, // ticker -> mid change vs ~1h ago
+  flash: new Map(), // ticker -> "up" | "down" for rows whose price just changed
+  prevMids: null,
 };
 
 // ---------- tiny DOM helpers ----------
@@ -75,6 +78,9 @@ const ICONS = {
   crown: '<path d="M4 17.5 3 7.5l5 4 4-6.5 4 6.5 5-4-1 10z" fill="currentColor"/><rect x="4" y="18.5" width="16" height="2" rx="1" fill="currentColor"/>',
   radar: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 12 18 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
   share: '<path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  grid: '<rect x="4" y="4" width="7" height="7" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="13" y="4" width="7" height="7" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="4" y="13" width="7" height="7" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="13" y="13" width="7" height="7" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+  spread: '<path d="M4 8h16M4 16h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 8v8" stroke="currentColor" stroke-width="1.8" stroke-dasharray="2 2.5"/>',
+  bolt: '<path d="M13 3 5 13.5h6L10 21l8-10.5h-6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
   trash: '<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 const icon = (name) => h("svg", { viewBox: "0 0 24 24", "aria-hidden": "true", html: ICONS[name] });
@@ -138,10 +144,16 @@ function renderHeader() {
 function renderLive() {
   const s = state.status;
   const el = $("#live");
-  if (!state.loaded) return el.replaceChildren(h("span", { class: "dot off" }), "Loading…");
-  if (!s || s.state === "auth") return el.replaceChildren(h("span", { class: "dot warn" }), "Not connected to World");
-  if (s.state === "error") return el.replaceChildren(h("span", { class: "dot warn" }), `Update failed · retrying · last good ${ago(state.rowsAt)}`);
-  el.replaceChildren(h("span", { class: "dot" }), h("b", {}, "Live"), ` · updated ${ago(s.at)} · ${s.events} events${s.source === "backend" ? " · cloud" : ""}`);
+  const left = h("div", { class: "sb-left" });
+  if (!state.loaded) left.append(h("span", { class: "dot off" }), "Loading…");
+  else if (!s || s.state === "auth") left.append(h("span", { class: "dot warn" }), "Not connected to World");
+  else if (s.state === "error") left.append(h("span", { class: "dot warn" }), `Retrying · last update ${ago(state.rowsAt)}`);
+  else {
+    const src = { relay: "via world.xyz", backend: "cloud" }[s.source];
+    left.append(h("span", { class: "dot" }), h("b", {}, "Live"), h("span", { class: "sb-sep" }), `${compact(s.markets)} markets`, h("span", { class: "sb-sep" }), ago(s.at));
+    if (src) left.append(h("span", { class: "sb-sep" }), src);
+  }
+  el.replaceChildren(left, h("div", { class: "sb-right" }, h("kbd", {}, "/"), "search", h("kbd", {}, "R"), "refresh"));
 }
 
 function renderKpis() {
@@ -149,12 +161,29 @@ function renderKpis() {
   const o = state.opportunities;
   const arbs = o ? o.underround.length + o.complement.length : 0;
   const signals = o ? arbs + o.favorites.length + o.movers.length : 0;
-  const tile = (label, value, sub) =>
-    h("div", { class: "kpi" }, h("div", { class: "kpi-label" }, label), h("div", { class: "kpi-value" }, value), h("div", { class: "kpi-sub" }, sub));
+  const tile = (ic, label, value, sub, { hot = false, onclick } = {}) =>
+    h(
+      onclick ? "button" : "div",
+      { class: `kpi${hot ? " hot" : ""}${onclick ? " click" : ""}`, onclick },
+      h("div", { class: "kpi-label" }, icon(ic), label),
+      h("div", { class: "kpi-value" }, value),
+      h("div", { class: "kpi-sub" }, sub),
+    );
   $("#kpis").replaceChildren(
-    tile("Markets", s ? compact(s.markets) : "—", s ? `${compact(s.tightMarkets)} tight (≤3¢)` : "live on World"),
-    tile("Spread", s?.medianSpread != null ? cents1(s.medianSpread) : "—", "median YES"),
-    tile("Signals", o ? String(signals) : "—", o ? (arbs ? h("span", { class: "yes" }, `${arbs} arbitrage`) : "no arbitrage now") : "scanning"),
+    tile("grid", "Markets", s ? compact(s.total || s.markets) : "—", s ? `${compact(s.tightMarkets)} tight ≤3¢` : "live on World", {
+      onclick: s
+        ? () => {
+            state.chip = "tight";
+            setTab("markets");
+            renderChips();
+          }
+        : null,
+    }),
+    tile("spread", "Spread", s?.medianSpread != null ? cents1(s.medianSpread) : "—", "median YES"),
+    tile("bolt", "Signals", o ? String(signals) : "—", o ? (arbs ? `${arbs} arbitrage live` : "no arbitrage now") : "scanning", {
+      hot: arbs > 0,
+      onclick: o ? () => setTab("signals") : null,
+    }),
   );
 }
 
@@ -282,15 +311,36 @@ function filteredRows() {
     .sort(SORTS[state.sort] || SORTS.liquidity);
 }
 
+// Event image, or a monogram tinted by a hash of the event so each event keeps its color.
+function avatar(r, size = "") {
+  const seed = [...(r.eventTicker || r.ticker || "")].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
+  const hue = seed % 360;
+  const letters = (r.eventTitle || r.title || "?").replace(/[^\p{L}\p{N} ]/gu, "").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+  const mono = h("span", { class: `avatar mono ${size}`, style: `--h:${hue}` }, letters || "?");
+  if (!r.imageUrl) return mono;
+  const img = h("img", { class: `avatar ${size}`, src: r.imageUrl, alt: "", loading: "lazy", referrerpolicy: "no-referrer" });
+  img.addEventListener("error", () => img.replaceWith(mono), { once: true });
+  return img;
+}
+
+function changePill(ticker) {
+  const d = state.moves[ticker];
+  if (d === undefined || Math.abs(d) < 0.005) return null;
+  return h("span", { class: `chg ${d > 0 ? "up" : "down"}` }, `${d > 0 ? "▲" : "▼"}${Math.abs(Math.round(d * 100)) || "<1"}¢`);
+}
+
 function marketRow(r, i) {
   const spreadClass = r.spread === null ? "" : r.spread <= 0.03 ? "sp-tight" : r.spread >= 0.08 ? "sp-wide" : "";
   const watching = state.watchlist.includes(r.ticker);
-  const sub = [r.eventTitle !== r.title ? r.eventTitle : null, r.hoursToClose !== null ? `closes ${closesIn(r.hoursToClose)}` : null, `vol ${compact(r.volume)}`]
+  const sub = [r.eventTitle !== r.title ? r.eventTitle : null, r.hoursToClose !== null ? closesIn(r.hoursToClose) : null, `vol ${compact(r.volume)}`]
     .filter(Boolean)
     .join(" · ");
+  const price = r.yesAsk ?? r.mid;
+  const flash = state.flash.get(r.ticker);
   return h(
     "button",
-    { class: `mrow${state.selected === i ? " sel" : ""}`, "data-i": i, onclick: () => openSheet({ type: "market", ticker: r.ticker }) },
+    { class: `mrow${state.selected === i ? " sel" : ""}${flash ? ` flash-${flash}` : ""}`, "data-i": i, onclick: () => openSheet({ type: "market", ticker: r.ticker }) },
+    avatar(r),
     h(
       "div",
       { class: "m-main" },
@@ -300,8 +350,9 @@ function marketRow(r, i) {
     h(
       "div",
       { class: "m-price" },
-      h("div", { class: "m-yes" }, cents(r.yesAsk ?? r.mid)),
-      h("div", { class: "m-book" }, `${cents(r.yesBid)}/${cents(r.yesAsk)} · `, h("span", { class: spreadClass }, cents(r.spread))),
+      h("div", { class: "m-top" }, changePill(r.ticker), h("span", { class: "m-yes" }, cents(price))),
+      h("div", { class: "prob", title: `${Math.round((price ?? 0) * 100)}% implied` }, h("span", { style: `width:${Math.round((price ?? 0) * 100)}%` })),
+      h("div", { class: "m-book" }, `${cents(r.yesBid)}–${cents(r.yesAsk)} · `, h("span", { class: spreadClass }, cents(r.spread))),
     ),
     ring(r.score),
   );
@@ -568,6 +619,7 @@ function renderPortfolio(view) {
       h(
         "button",
         { class: "mrow pf-row", onclick: () => openSheet({ type: "market", ticker: pos.ticker }) },
+        avatar(state.rows.find((x) => x.ticker === pos.ticker) || pos),
         h(
           "div",
           { class: "m-main" },
@@ -730,7 +782,12 @@ function marketSheet(ticker) {
   );
 
   return [
-    sheetHead(r.title, r.eventTitle !== r.title ? r.eventTitle : r.category),
+    h(
+      "div",
+      { class: "sheet-head" },
+      h("div", { class: "sheet-title" }, avatar(r, "lg"), h("div", { style: "min-width:0" }, h("h2", {}, r.title), h("p", {}, r.eventTitle !== r.title ? r.eventTitle : categoryName(r.category)))),
+      h("button", { class: "icon-btn", "aria-label": "Close", onclick: closeSheet }, icon("close")),
+    ),
     h(
       "div",
       { class: "spark" },
@@ -1235,7 +1292,32 @@ async function load() {
     unlock: unlock?.unlock || null,
     loaded: true,
   });
+  computeMoves();
   renderAll();
+  if (state.flash.size) setTimeout(() => state.flash.clear(), 1600);
+}
+
+// Hourly change per market from the stored snapshots, and which prices moved since the last render.
+function computeMoves() {
+  const now = state.status?.at || Date.now();
+  const snaps = state.snapshots || [];
+  const base = [...snaps].reverse().find((x) => now - x.t >= 55 * 60 * 1000) || snaps[0];
+  const moves = {};
+  const mids = {};
+  for (const r of state.rows) {
+    if (r.mid === null || r.mid === undefined) continue;
+    mids[r.ticker] = r.mid;
+    const b = base?.mids?.[r.ticker];
+    if (typeof b === "number" && base.t < now) moves[r.ticker] = r.mid - b;
+  }
+  state.moves = moves;
+  if (state.prevMids) {
+    for (const [t, m] of Object.entries(mids)) {
+      const prev = state.prevMids[t];
+      if (typeof prev === "number" && Math.abs(m - prev) >= 0.005) state.flash.set(t, m > prev ? "up" : "down");
+    }
+  }
+  state.prevMids = mids;
 }
 
 let pending;

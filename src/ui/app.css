@@ -122,7 +122,7 @@ body.panel { width: auto; height: 100vh; }
 .chg { font: 600 9.5px/1 var(--mono); padding: 3px 4px; border-radius: 5px; }
 .chg.up { color: var(--yes); background: var(--yes-soft); }
 .chg.down { color: var(--no); background: var(--no-soft); }
-.chg.flat { color: var(--text-3); background: var(--hover); }
+.chg.flat { color: var(--text-3); background: none; }
 .prob { width: 64px; height: 3px; border-radius: 3px; background: var(--hover); overflow: hidden; }
 .prob span { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, rgba(61, 214, 140, 0.55), var(--yes)); }
 .m-book { font: 500 10px var(--mono); color: var(--text-3); white-space: nowrap; }
@@ -398,3 +398,78 @@ body.panel { width: auto; height: 100vh; }
   background: conic-gradient(var(--accent) calc(var(--p) * 1%), var(--hover) 0);
 }
 .setup-ring span { width: 26px; height: 26px; border-radius: 50%; background: var(--bg-2); display: grid; place-items: center; font: 600 9.5px var(--mono); color: var(--accent-2); }
+
+/* Watchlist */
+.summary {
+  display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 1px; margin: 2px 0 4px; border-radius: 14px; overflow: hidden;
+  background: var(--line); border: 1px solid var(--line);
+}
+.summary > div { background: linear-gradient(180deg, var(--surface-2), var(--surface)); padding: 10px 12px; min-width: 0; }
+.sum-k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); font-weight: 600; }
+.sum-v { font-size: 18px; font-weight: 600; margin-top: 3px; letter-spacing: -0.03em; }
+.sum-sub { font-size: 10.5px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.wrow {
+  display: grid; grid-template-columns: 34px 1fr 64px auto; gap: 11px; align-items: center; width: 100%; padding: 9px 8px;
+  border-radius: 12px; border: 1px solid transparent; background: none; text-align: left; transition: background 0.15s, border-color 0.15s;
+}
+.wrow:hover { background: var(--surface); border-color: var(--line); }
+.w-price { display: grid; justify-items: end; gap: 4px; min-width: 44px; }
+.mini-spark { display: block; }
+.mini-spark.empty { width: 64px; height: 24px; border-bottom: 1px dashed var(--line-2); }
+
+.acard { display: grid; gap: 10px; padding: 12px; margin: 0 0 8px; border-radius: 14px; background: linear-gradient(180deg, var(--surface-2), var(--surface)); border: 1px solid var(--line); }
+.acard.near { border-color: rgba(61, 214, 140, 0.35); }
+.a-head { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; }
+.a-bell { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--warn-soft); color: var(--warn); }
+.a-bell svg { width: 17px; height: 17px; }
+.acard.near .a-bell { background: var(--yes-soft); color: var(--yes); }
+.a-body { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; }
+.a-target { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
+.a-track { height: 6px; border-radius: 6px; background: var(--hover); overflow: hidden; }
+.a-track span { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, rgba(224, 164, 59, 0.5), var(--warn)); }
+.acard.near .a-track span { background: linear-gradient(90deg, rgba(61, 214, 140, 0.5), var(--yes)); }
+.a-now { font-size: 12px; color: var(--text-2); }
+.a-foot { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--text-3); }
+
+.empty-card {
+  display: grid; justify-items: center; gap: 6px; text-align: center; padding: 22px 18px; margin: 0 0 8px; border-radius: 14px;
+  background: var(--surface); border: 1px dashed var(--line-2); color: var(--text-3); font-size: 12px;
+}
+.empty-card b { color: var(--text); font-size: 13.5px; }
+.empty-card .btn { margin-top: 6px; }
+.empty-ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--surface-2); border: 1px solid var(--line-2); color: var(--text-2); margin-bottom: 4px; }
+.empty-ic svg { width: 19px; height: 19px; }
+
+/* Portfolio */
+.wallet-card .pf-form { width: 100%; margin-top: 8px; padding: 0; }
+.wallet-card .pf-form input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12px; }
+.wallet-bar { display: flex; align-items: center; gap: 10px; padding: 4px 6px 10px; font-size: 12px; }
+.wb-ic { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: var(--hover); color: var(--text-2); }
+.wb-ic svg { width: 14px; height: 14px; }
+.wb-addr { color: var(--text); font-weight: 600; }
+.wb-spacer { flex: 1; }
+.wallet-bar .linkish { font-size: 11.5px; }
+.pf-hero {
+  display: grid; gap: 10px; padding: 16px; margin-bottom: 6px; border-radius: 16px; border: 1px solid var(--line-2);
+  background: radial-gradient(120% 90% at 100% 0%, rgba(124, 156, 255, 0.14), transparent 60%), linear-gradient(180deg, var(--surface-2), var(--surface));
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 14px 34px rgba(0, 0, 0, 0.3);
+}
+.pf-k { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); font-weight: 600; }
+.pf-k .faint { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.pf-v { font-size: 30px; font-weight: 700; letter-spacing: -0.04em; line-height: 1; }
+.pf-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.pf-stats div { display: grid; gap: 2px; }
+.pf-stats span { font-size: 10.5px; color: var(--text-3); }
+.pf-stats b { font-size: 13.5px; font-weight: 600; }
+.alloc { display: flex; height: 8px; border-radius: 6px; overflow: hidden; gap: 2px; background: var(--hover); }
+.alloc span { height: 100%; min-width: 3px; }
+.pf-warn { display: flex; gap: 7px; align-items: center; font-size: 11.5px; color: var(--warn); }
+.pf-warn svg { width: 14px; height: 14px; }
+.pcard {
+  position: relative; display: grid; grid-template-columns: 34px 1fr auto; gap: 11px; align-items: center; width: 100%; padding: 11px 12px 11px 14px;
+  margin: 0 0 6px; border-radius: 13px; text-align: left; background: var(--surface); border: 1px solid var(--line); transition: border-color 0.15s;
+}
+.pcard:hover { border-color: var(--line-2); }
+.pc-swatch { position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 0 3px 3px 0; }
+.pcard .m-title { gap: 6px; }
+.prob.wide { width: 100%; margin-top: 6px; }

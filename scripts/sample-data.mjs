@@ -86,8 +86,13 @@ export function sampleState(now = Date.now()) {
   }
   // Make a couple of clear movers against the ~1h-old snapshot.
   const base = snapshots.find((s) => now - s.t <= H + 10 * 60 * 1000) || snapshots[0];
-  base.mids["WXFED-CUT"] = 0.64;
-  base.mids["WXETH-4500"] = 0.51;
+  // Make two clear movers: shift history before the last hour, easing in over that hour.
+  for (const snap of snapshots) {
+    const age = now - snap.t;
+    const k = age >= H ? 1 : age / H;
+    snap.mids["WXFED-CUT"] = +(snap.mids["WXFED-CUT"] - 0.09 * k).toFixed(4);
+    snap.mids["WXETH-4500"] = +(snap.mids["WXETH-4500"] + 0.07 * k).toFixed(4);
+  }
   const opportunities = {
     underround: findUnderround(events),
     complement: findComplementArb(rows),

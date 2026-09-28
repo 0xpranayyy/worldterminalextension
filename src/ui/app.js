@@ -585,6 +585,86 @@ function renderSignals(view) {
 
 // ---------- watchlist ----------
 
+// Tiny 12h mid-price line for list rows.
+function miniSpark(r, w = 64, hgt = 24) {
+  const pts = historyFor(r.ticker, state.snapshots, { t: state.status?.at || Date.now(), mid: r.mid });
+  if (pts.length < 2) return h("span", { class: "mini-spark empty" });
+  const vals = pts.map((p) => p.mid);
+  let lo = Math.min(...vals);
+  let hi = Math.max(...vals);
+  if (hi - lo < 0.01) {
+    lo -= 0.005;
+    hi += 0.005;
+  }
+  const t0 = pts[0].t;
+  const t1 = pts[pts.length - 1].t;
+  const x = (t) => ((t - t0) / Math.max(1, t1 - t0)) * (w - 4) + 2;
+  const y = (v) => hgt - 3 - ((v - lo) / (hi - lo)) * (hgt - 6);
+  const line = pts.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(p.mid).toFixed(1)}`).join(" ");
+  const up = vals[vals.length - 1] >= vals[0];
+  const c = up ? "#3dd68c" : "#ff6b6b";
+  const last = pts[pts.length - 1];
+  return h("svg", {
+    class: "mini-spark",
+    viewBox: `0 0 ${w} ${hgt}`,
+    width: w,
+    height: hgt,
+    "aria-hidden": "true",
+    html: `<path d="${line} L${x(last.t).toFixed(1)},${hgt} L2,${hgt} Z" fill="${c}" opacity=".12"/><path d="${line}" fill="none" stroke="${c}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${x(last.t).toFixed(1)}" cy="${y(last.mid).toFixed(1)}" r="2.2" fill="${c}"/>`,
+  });
+}
+
+function watchRow(r) {
+  const price = r.yesAsk ?? r.mid;
+  return h(
+    "button",
+    { class: "wrow", onclick: () => openSheet({ type: "market", ticker: r.ticker }) },
+    avatar(r),
+    h("div", { class: "m-main" }, h("div", { class: "m-title" }, r.title), h("div", { class: "m-meta" }, [r.eventTitle !== r.title ? r.eventTitle : categoryName(r.category), r.hoursToClose !== null ? closesIn(r.hoursToClose) : null].filter(Boolean).join(" · "))),
+    miniSpark(r),
+    h("div", { class: "w-price" }, h("span", { class: "m-yes" }, cents(price)), changePill(r.ticker) || h("span", { class: "chg flat" }, "—")),
+  );
+}
+
+function alertCard(a, r) {
+  const now = r ? (a.side === "NO" ? r.noAsk : r.yesAsk) : null;
+  // Distance to the trigger in cents; the bar fills as the price closes in (20¢ window).
+  const dist = now === null ? null : a.op === "below" ? now - a.price : a.price - now;
+  const progress = dist === null ? 0 : Math.max(0.04, Math.min(1, 1 - dist / 0.2));
+  const near = dist !== null && dist <= 0.02;
+  return h(
+    "div",
+    { class: `acard${near ? " near" : ""}` },
+    h(
+      "div",
+      { class: "a-head" },
+      h("span", { class: "a-bell" }, icon("bell")),
+      h("div", { class: "m-main" }, h("div", { class: "m-title", title: a.title }, r ? r.title : a.title), h("div", { class: "m-meta" }, r && r.eventTitle !== r.title ? r.eventTitle : "Price alert")),
+      h(
+        "button",
+        {
+          class: "icon-btn",
+          title: "Delete alert",
+          "aria-label": "Delete alert",
+          onclick: async () => {
+            await send({ type: "removeAlert", id: a.id });
+            toast("Alert deleted");
+          },
+        },
+        icon("trash"),
+      ),
+    ),
+    h(
+      "div",
+      { class: "a-body" },
+      h("div", { class: "a-target" }, h("span", { class: `side-pill ${a.side === "YES" ? "yes" : "no"}` }, a.side), h("span", { class: "num" }, `${a.op === "below" ? "≤" : "≥"} ${cents(a.price)}`)),
+      h("div", { class: "a-track" }, h("span", { style: `width:${(progress * 100).toFixed(0)}%` })),
+      h("div", { class: "a-now num" }, `now ${cents(now)}`),
+    ),
+    h("div", { class: "a-foot" }, dist === null ? "Market not live" : dist <= 0 ? "Triggering on next refresh" : `${Math.round(dist * 100) || "<1"}¢ away`, h("span", { class: `pill ${near ? "good" : ""}` }, near ? "close" : "armed")),
+  );
+}
+
 function renderWatch(view) {
   if (!state.unlocked) {
     view.append(gate("Watchlist & price alerts", "Star markets, set YES/NO price alerts, get desktop notifications."));
@@ -592,45 +672,45 @@ function renderWatch(view) {
   }
   const byTicker = new Map(state.rows.map((r) => [r.ticker, r]));
   const watched = state.watchlist.map((t) => byTicker.get(t)).filter(Boolean);
-  view.append(h("div", { class: "section-label" }, h("span", {}, "Watching"), h("span", {}, String(watched.length))));
-  view.append(...(watched.length ? watched.map(marketRow) : [emptyState("star", "Nothing starred yet", "Open any market and tap Watch.")]));
-  view.append(h("div", { class: "section-label" }, h("span", {}, "Price alerts"), h("span", {}, String(state.alerts.length))));
-  if (!state.alerts.length) {
-    view.append(emptyState("bell", "No alerts", "Open a market and set a YES or NO price."));
-    return;
-  }
-  for (const a of state.alerts) {
-    const r = byTicker.get(a.ticker);
-    const now = r ? (a.side === "NO" ? r.noAsk : r.yesAsk) : null;
-    view.append(
+  const biggest = watched.map((r) => ({ r, d: state.moves[r.ticker] ?? 0 })).sort((a, b) => Math.abs(b.d) - Math.abs(a.d))[0];
+  view.append(
+    h(
+      "div",
+      { class: "summary" },
+      h("div", {}, h("div", { class: "sum-k" }, "Watching"), h("div", { class: "sum-v num" }, String(watched.length))),
+      h("div", {}, h("div", { class: "sum-k" }, "Alerts armed"), h("div", { class: "sum-v num" }, String(state.alerts.length))),
       h(
         "div",
-        { class: "arow" },
-        h("div", { style: "min-width:0" }, h("div", { class: "t", title: a.title }, a.title), h("div", { class: "d" }, `${a.side} ask ${a.op === "below" ? "≤" : "≥"} ${cents(a.price)} · now ${cents(now)}`)),
-        h(
-          "button",
-          {
-            class: "icon-btn",
-            title: "Delete alert",
-            "aria-label": "Delete alert",
-            onclick: async () => {
-              await send({ type: "removeAlert", id: a.id });
-              toast("Alert deleted");
-            },
-          },
-          icon("trash"),
-        ),
+        {},
+        h("div", { class: "sum-k" }, "Top mover"),
+        biggest && Math.abs(biggest.d) >= 0.005
+          ? h("div", { class: `sum-v num ${biggest.d > 0 ? "yes" : "no"}` }, `${biggest.d > 0 ? "+" : "−"}${Math.abs(Math.round(biggest.d * 100)) || "<1"}¢`)
+          : h("div", { class: "sum-v num faint" }, "—"),
+        biggest && Math.abs(biggest.d) >= 0.005 ? h("div", { class: "sum-sub" }, biggest.r.title) : null,
       ),
-    );
+    ),
+  );
+  view.append(h("div", { class: "section-label" }, h("span", {}, "Watching"), h("span", {}, "12h")));
+  view.append(
+    ...(watched.length
+      ? watched.map(watchRow)
+      : [h("div", { class: "empty-card" }, h("span", { class: "empty-ic" }, icon("star")), h("b", {}, "Nothing starred yet"), h("span", {}, "Open any market and tap Watch to track it here."), h("button", { class: "btn", onclick: () => setTab("markets") }, "Browse markets"))]),
+  );
+  view.append(h("div", { class: "section-label" }, h("span", {}, "Price alerts"), h("span", {}, state.settings.notifyAlerts ? "notifications on" : "notifications off")));
+  if (!state.alerts.length) {
+    view.append(h("div", { class: "empty-card" }, h("span", { class: "empty-ic" }, icon("bell")), h("b", {}, "No alerts yet"), h("span", {}, "Open a market and set a YES or NO price. We'll notify you when it hits.")));
+    return;
   }
+  for (const a of state.alerts) view.append(alertCard(a, byTicker.get(a.ticker)));
 }
 
 // ---------- portfolio ----------
 
 const usd = (n) => `$${(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const ALLOC = ["#7c9cff", "#3dd68c", "#c9a45c", "#e57bc3", "#5cc8e0", "#a78bfa"];
 
 function portfolioWallet() {
-  return state.unlock?.wallet || prefs.portfolioWallet || "";
+  return prefs.portfolioWallet || state.unlock?.wallet || "";
 }
 
 async function loadPortfolio(wallet = portfolioWallet()) {
@@ -642,6 +722,35 @@ async function loadPortfolio(wallet = portfolioWallet()) {
   if (state.tab === "portfolio") renderView();
 }
 
+function walletForm() {
+  const input = h("input", { type: "text", id: "pf-wallet", placeholder: "Solana wallet address", spellcheck: "false", autocomplete: "off", value: prefs.portfolioWallet || "" });
+  return h(
+    "div",
+    { class: "empty-card wallet-card" },
+    h("span", { class: "empty-ic" }, icon("wallet")),
+    h("b", {}, "Track your World positions"),
+    h("span", {}, "Enter the wallet you trade with. Read-only: we only look at public balances."),
+    h(
+      "form",
+      {
+        class: "pf-form",
+        onsubmit: (e) => {
+          e.preventDefault();
+          const v = input.value.trim();
+          if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(v)) return toast("That doesn't look like a Solana address");
+          prefs.portfolioWallet = v;
+          savePrefs();
+          state.portfolioEditing = false;
+          state.portfolio = { loading: false, data: null, error: null };
+          loadPortfolio();
+        },
+      },
+      input,
+      h("button", { class: "btn primary", type: "submit" }, "Load"),
+    ),
+  );
+}
+
 function renderPortfolio(view) {
   if (!state.unlocked) {
     view.append(gate("Portfolio", "See every World position you hold, what it would sell for right now, and which ones are hard to exit."));
@@ -649,25 +758,8 @@ function renderPortfolio(view) {
   }
   const p = state.portfolio;
   const wallet = portfolioWallet();
-  if (!wallet) {
-    const input = h("input", { type: "text", id: "pf-wallet", placeholder: "Solana wallet address", spellcheck: "false", style: "flex:1;min-width:0" });
-    view.append(
-      emptyState("radar", "Which wallet?", "Enter the wallet you trade with on World."),
-      h(
-        "form",
-        {
-          class: "pf-form",
-          onsubmit: (e) => {
-            e.preventDefault();
-            prefs.portfolioWallet = input.value.trim();
-            savePrefs();
-            loadPortfolio();
-          },
-        },
-        input,
-        h("button", { class: "btn primary", type: "submit" }, "Load"),
-      ),
-    );
+  if (!wallet || state.portfolioEditing) {
+    view.append(walletForm());
     return;
   }
   if (!p.data && !p.error && !p.loading) {
@@ -679,9 +771,35 @@ function renderPortfolio(view) {
   view.append(
     h(
       "div",
-      { class: "section-label" },
-      h("span", { class: "case", title: wallet }, `${wallet.slice(0, 4)}…${wallet.slice(-4)}`),
-      h("button", { class: "linkish", onclick: () => loadPortfolio(), disabled: p.loading }, p.loading ? "Updating…" : d ? `Updated ${ago(d.at)} · refresh` : "Refresh"),
+      { class: "wallet-bar" },
+      h("span", { class: "wb-ic" }, icon("wallet")),
+      h("span", { class: "num wb-addr", title: wallet }, `${wallet.slice(0, 4)}…${wallet.slice(-4)}`),
+      h(
+        "button",
+        {
+          class: "linkish",
+          onclick: async () => {
+            try {
+              await navigator.clipboard.writeText(wallet);
+              toast("Address copied");
+            } catch {}
+          },
+        },
+        "Copy",
+      ),
+      h(
+        "button",
+        {
+          class: "linkish",
+          onclick: () => {
+            state.portfolioEditing = true;
+            renderView();
+          },
+        },
+        "Change",
+      ),
+      h("span", { class: "wb-spacer" }),
+      h("button", { class: "icon-btn", title: "Refresh positions", "aria-label": "Refresh positions", disabled: p.loading, onclick: () => loadPortfolio() }, icon("refresh")),
     ),
   );
   if (p.error) view.append(h("div", { class: "pf-error" }, p.error));
@@ -689,45 +807,62 @@ function renderPortfolio(view) {
     if (p.loading) view.append(...skeleton(4));
     return;
   }
-  const tile = (label, value, sub, cls = "") => h("div", { class: "kpi" }, h("div", { class: "kpi-label" }, label), h("div", { class: `kpi-value ${cls}` }, value), h("div", { class: "kpi-sub" }, sub));
+  const upside = d.maxPayout - d.exitValue;
+  const total = d.exitValue || 1;
   view.append(
     h(
       "div",
-      { class: "kpis pf-kpis" },
-      tile("Exit value", usd(d.exitValue), "sell now at bid"),
-      tile("If all win", usd(d.maxPayout), "$1 per share"),
-      tile("Positions", String(d.positions.length), d.thinCount ? h("span", { class: "warn" }, `${d.thinCount} hard to exit`) : "all liquid"),
+      { class: "pf-hero" },
+      h("div", { class: "pf-k" }, "Exit value", h("span", { class: "faint" }, ` · updated ${ago(d.at)}`)),
+      h("div", { class: "pf-v num" }, usd(d.exitValue)),
+      h(
+        "div",
+        { class: "pf-stats" },
+        h("div", {}, h("span", {}, "If all win"), h("b", { class: "num" }, usd(d.maxPayout))),
+        h("div", {}, h("span", {}, "Upside"), h("b", { class: "num yes" }, `+${usd(upside)}`)),
+        h("div", {}, h("span", {}, "Positions"), h("b", { class: "num" }, String(d.positions.length))),
+      ),
+      d.positions.length
+        ? h(
+            "div",
+            { class: "alloc", title: "Allocation by exit value" },
+            ...d.positions.map((pos, i) => h("span", { style: `width:${((pos.exitValue / total) * 100).toFixed(2)}%;background:${ALLOC[i % ALLOC.length]}`, title: `${pos.title} ${usd(pos.exitValue)}` })),
+          )
+        : null,
+      d.thinCount ? h("div", { class: "pf-warn" }, icon("info"), `${d.thinCount} position${d.thinCount === 1 ? " is" : "s are"} hard to exit right now`) : null,
     ),
   );
   if (!d.positions.length) {
-    view.append(emptyState("radar", "No open World positions", d.tokens ? `This wallet holds ${d.tokens} tokens, none in live World markets.` : "Positions show up here after you trade on World."));
+    view.append(h("div", { class: "empty-card" }, h("span", { class: "empty-ic" }, icon("radar")), h("b", {}, "No open World positions"), h("span", {}, d.tokens ? `This wallet holds ${d.tokens} tokens, none in live World markets.` : "Positions show up here after you trade on World.")));
     return;
   }
-  for (const pos of d.positions) {
-    const meta = [pos.eventTitle !== pos.title ? pos.eventTitle : null, `${pos.qty.toLocaleString("en-US", { maximumFractionDigits: 2 })} shares`, pos.hoursToClose !== null ? `closes ${closesIn(pos.hoursToClose)}` : null]
-      .filter(Boolean)
-      .join(" · ");
+  view.append(h("div", { class: "section-label" }, h("span", {}, "Positions"), h("span", {}, "by value")));
+  d.positions.forEach((pos, i) => {
+    const r = state.rows.find((x) => x.ticker === pos.ticker);
+    const share = d.exitValue ? (pos.exitValue / d.exitValue) * 100 : 0;
     view.append(
       h(
         "button",
-        { class: "mrow pf-row", onclick: () => openSheet({ type: "market", ticker: pos.ticker }) },
-        avatar(state.rows.find((x) => x.ticker === pos.ticker) || pos),
+        { class: "pcard", onclick: () => openSheet({ type: "market", ticker: pos.ticker }) },
+        h("span", { class: "pc-swatch", style: `background:${ALLOC[i % ALLOC.length]}` }),
+        avatar(r || pos),
         h(
           "div",
           { class: "m-main" },
           h("div", { class: "m-title" }, h("span", { class: `side-pill ${pos.side === "YES" ? "yes" : "no"}` }, pos.side), pos.title),
-          h("div", { class: "m-meta" }, meta),
+          h("div", { class: "m-meta" }, [`${pos.qty.toLocaleString("en-US", { maximumFractionDigits: 2 })} shares`, pos.hoursToClose !== null ? closesIn(pos.hoursToClose) : null, `${share.toFixed(0)}%`].filter(Boolean).join(" · ")),
+          h("div", { class: "prob wide" }, h("span", { style: `width:${Math.round((pos.mark ?? 0) * 100)}%` })),
         ),
         h(
           "div",
-          { class: "m-price" },
-          h("div", { class: "m-yes" }, usd(pos.exitValue)),
-          h("div", { class: "m-book" }, `bid ${cents(pos.bid)}`, pos.thin ? h("span", { class: "sp-wide" }, " · thin") : null),
+          { class: "w-price" },
+          h("span", { class: "m-yes" }, usd(pos.exitValue)),
+          pos.thin ? h("span", { class: "pill bad" }, "thin") : h("span", { class: "m-book" }, `bid ${cents(pos.bid)}`),
         ),
       ),
     );
-  }
-  if (d.thinCount) view.append(h("p", { class: "signal-help" }, "“Thin” means no buyer right now or a spread of 6¢+. Selling early may cost more than the quote suggests."));
+  });
+  if (d.thinCount) view.append(h("p", { class: "sig-help" }, icon("info"), h("span", {}, "“Thin” means no buyer right now or a spread of 6¢+. Selling early may cost more than the quote suggests.")));
 }
 
 function emptyState(ic, title, text) {

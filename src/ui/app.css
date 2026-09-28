@@ -113,7 +113,7 @@ body.panel { width: auto; height: 100vh; }
 
 /* Signal cards */
 .scard {
-  display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 12px; margin: 4px 0; border-radius: 12px;
+  display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; cursor: pointer; align-items: center; padding: 12px; margin: 4px 0; border-radius: 12px;
   background: var(--surface); border: 1px solid var(--line); text-align: left; width: 100%; transition: border-color 0.15s, background 0.15s;
 }
 .scard:hover { border-color: var(--line-2); background: var(--surface-2); }
@@ -220,3 +220,10 @@ body.panel { width: auto; height: 100vh; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
 .foot { text-align: center; font-size: 10.5px; color: var(--text-3); padding: 10px 12px 2px; }
+
+.s-share { align-self: start; }
+.share-preview { display: block; width: 100%; border-radius: 12px; border: 1px solid var(--line-2); }
+.share-text { color: var(--text-2); font-size: 12.5px; margin: 10px 2px 0; }
+.share-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.share-actions .btn.primary { grid-column: span 3; }
+.share-actions .btn.lg:not(.primary) { font-size: 12.5px; padding: 0 8px; }

@@ -99,8 +99,22 @@ async function refreshFromBackend() {
     const pro = feed.plan === "pro";
     if (!unlock || unlock.ok !== pro) await store.set({ unlock: { wallet: session.wallet, ok: pro, via: "backend", verifiedAt: Date.now() } });
   }
-  await commit(feed.rows, feed.opportunities, { ...feed.status, total: feed.total, source: "backend" });
+  await commit(feed.rows, applyThresholds(feed.opportunities, await getSettings()), { ...feed.status, total: feed.total, source: "backend" });
   return true;
+}
+
+// The backend scans with loose thresholds; narrow its signals to this user's Settings.
+function applyThresholds(o, s) {
+  if (!o) return o;
+  const keep = (list, test) => (list || []).filter((x) => x.redacted || test(x)).slice(0, 50);
+  const minEdge = s.minEdgeCents / 100;
+  return {
+    ...o,
+    underround: keep(o.underround, (x) => x.edge >= minEdge),
+    complement: keep(o.complement, (x) => x.edge >= minEdge),
+    favorites: keep(o.favorites, (x) => x.price >= s.favoriteMinCents / 100 && x.hoursToClose <= s.favoriteMaxHours),
+    movers: keep(o.movers, (x) => Math.abs(x.move) >= s.moverCents / 100),
+  };
 }
 
 async function refreshDirect() {

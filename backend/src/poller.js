@@ -1,6 +1,7 @@
 // Cron job: pull the upstream feed once for everyone, score it, store the latest view in KV
 // and a mid-price snapshot in D1 every 10 minutes.
 import { fetchActiveEvents } from "../../src/lib/api.js";
+import { broadcast } from "./broadcast.js";
 import {
   flattenMarkets,
   findUnderround,
@@ -34,11 +35,12 @@ export async function poll(env, now = Date.now()) {
     .all();
   const baseMids = base.results.length ? Object.fromEntries(base.results.map((r) => [r.ticker, r.mid])) : null;
 
+  // Loose thresholds here; each extension narrows them to the user's own Settings.
   const opportunities = {
-    underround: findUnderround(events).slice(0, 100),
-    complement: findComplementArb(rows).slice(0, 100),
-    favorites: findNearExpiryFavorites(rows).slice(0, 100),
-    movers: baseMids ? findMovers(rows, baseMids).slice(0, 100) : [],
+    underround: findUnderround(events, { minEdge: 0.001 }).slice(0, 150),
+    complement: findComplementArb(rows, { minEdge: 0.001 }).slice(0, 150),
+    favorites: findNearExpiryFavorites(rows, { minPrice: 0.7, maxHours: 168 }).slice(0, 150),
+    movers: baseMids ? findMovers(rows, baseMids, { minMove: 0.02 }).slice(0, 150) : [],
     moversSince: base.results[0]?.t ?? null,
   };
 
@@ -52,6 +54,7 @@ export async function poll(env, now = Date.now()) {
     tightMarkets: rows.filter((r) => r.spread !== null && r.spread <= 0.03).length,
   };
   await env.KV.put("latest", JSON.stringify({ rows, opportunities, status }));
+  await broadcast(env, opportunities, now).catch((err) => console.error("broadcast failed", err));
 
   const last = await env.DB.prepare("SELECT MAX(t) AS t FROM snapshots").first();
   if (!last?.t || now - last.t >= SNAPSHOT_EVERY_MS) {

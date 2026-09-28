@@ -1,5 +1,6 @@
 import { CONFIG, DEFAULT_SETTINGS, normalizeCode, inviteUrl, eventUrl, WORLD_ORIGIN } from "../config.js";
 import { SORTS, SCORE_WEIGHTS, scoreParts, historyFor, marketLabel } from "../lib/analytics.js";
+import { drawCard, shareText } from "./share.js";
 
 const $ = (s) => document.querySelector(s);
 const send = (msg) => chrome.runtime.sendMessage(msg);
@@ -67,6 +68,7 @@ const ICONS = {
   check: '<path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   crown: '<path d="M4 17.5 3 7.5l5 4 4-6.5 4 6.5 5-4-1 10z" fill="currentColor"/><rect x="4" y="18.5" width="16" height="2" rx="1" fill="currentColor"/>',
   radar: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 12 18 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+  share: '<path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   trash: '<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 const icon = (name) => h("svg", { viewBox: "0 0 24 24", "aria-hidden": "true", html: ICONS[name] });
@@ -369,10 +371,23 @@ function signalCard(o) {
   }
   const open = () => (o.ticker ? openSheet({ type: "market", ticker: o.ticker }) : chrome.tabs.create({ url: eventUrl(o.eventTicker) }));
   return h(
-    "button",
-    { class: "scard", onclick: open },
+    "div",
+    { class: "scard", role: "button", tabindex: "0", onclick: open, onkeydown: (e) => e.key === "Enter" && open() },
     edge,
-    h("div", {}, h("div", { class: "s-title" }, o.title), h("div", { class: "s-line" }, line)),
+    h("div", { style: "min-width:0" }, h("div", { class: "s-title" }, o.title), h("div", { class: "s-line" }, line)),
+    h(
+      "button",
+      {
+        class: "icon-btn s-share",
+        title: "Share",
+        "aria-label": "Share this signal",
+        onclick: (e) => {
+          e.stopPropagation();
+          openSheet({ type: "share", kind: "signal", signal: o });
+        },
+      },
+      icon("share"),
+    ),
   );
 }
 
@@ -498,6 +513,7 @@ function renderSheet(fresh = false) {
   if (s.type === "market") body = marketSheet(s.ticker);
   else if (s.type === "unlock") body = unlockSheet();
   else if (s.type === "settings") body = settingsSheet();
+  else if (s.type === "share") body = shareSheet(s);
   if (!body) return closeSheet();
   const scroll = el.scrollTop;
   el.replaceChildren(...[body].flat());
@@ -645,21 +661,79 @@ function marketSheet(ticker) {
             watching ? "Watching" : "Watch",
           )
         : h("button", { class: "btn lg gold", onclick: () => openSheet({ type: "unlock" }) }, icon("crown"), "Pro"),
+      h("button", { class: "btn lg", title: "Share", onclick: () => openSheet({ type: "share", kind: "market", ticker: r.ticker }) }, icon("share"), "Share"),
+    ),
+  ];
+}
+
+function shareSheet(s) {
+  const data = { kind: s.kind };
+  if (s.kind === "market") {
+    const r = state.rows.find((x) => x.ticker === s.ticker);
+    if (!r) return null;
+    Object.assign(data, { row: r, history: historyFor(r.ticker, state.snapshots, { t: state.status?.at || Date.now(), mid: r.mid }) });
+    data.link = eventUrl(r.eventTicker);
+  } else {
+    data.signal = s.signal;
+    data.link = eventUrl(s.signal.eventTicker);
+  }
+  data.invite = data.link;
+  const canvas = drawCard(document.createElement("canvas"), data);
+  const text = shareText(data);
+  const blob = () => new Promise((res) => canvas.toBlob(res, "image/png"));
+  const intent = `https://x.com/intent/post?${new URLSearchParams({ text, url: data.link })}`;
+  return [
+    sheetHead("Share", "Every share carries your invite link."),
+    h("img", { class: "share-preview", src: canvas.toDataURL("image/png"), alt: text }),
+    h("p", { class: "share-text" }, text),
+    h(
+      "div",
+      { class: "share-actions" },
+      h("a", { class: "btn primary lg", href: intent, target: "_blank", rel: "noopener" }, "Post on X"),
       h(
         "button",
         {
           class: "btn lg",
-          title: "Copy link",
           onclick: async () => {
             try {
-              await navigator.clipboard.writeText(eventUrl(r.eventTicker));
-              toast("Link copied");
+              await navigator.clipboard.write([new ClipboardItem({ "image/png": blob() })]);
+              toast("Image copied");
+            } catch {
+              toast("Couldn't copy. Use Download");
+            }
+          },
+        },
+        "Copy image",
+      ),
+      h(
+        "button",
+        {
+          class: "btn lg",
+          onclick: async () => {
+            const url = URL.createObjectURL(await blob());
+            const a = h("a", { href: url, download: `world-terminal-${(s.ticker || s.signal?.eventTicker || "signal").toLowerCase()}.png` });
+            document.body.append(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          },
+        },
+        "Download",
+      ),
+      h(
+        "button",
+        {
+          class: "btn lg",
+          onclick: async () => {
+            try {
+              await navigator.clipboard.writeText(`${text} ${data.link}`);
+              toast("Text and link copied");
             } catch {
               toast("Couldn't copy");
             }
           },
         },
-        "Copy",
+        "Copy text",
       ),
     ),
   ];

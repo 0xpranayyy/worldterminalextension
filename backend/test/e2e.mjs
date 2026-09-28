@@ -21,6 +21,7 @@ function wallet() {
 const pro = wallet();
 const other = wallet();
 const fresh = wallet();
+const posts = [];
 const referrals = { [pro.address]: "REFCODE1", [other.address]: "SOMEONE9" };
 
 // ---- mock upstream (markets + users API) ----
@@ -35,6 +36,15 @@ const upstream = createServer((req, res) => {
     const cursor = Number(url.searchParams.get("cursor") || 0);
     const limit = Number(url.searchParams.get("limit") || 40);
     return send(200, { events: events.slice(cursor, cursor + limit), cursor: cursor + limit });
+  }
+  if (req.method === "POST" && (url.pathname.startsWith("/tg/") || url.pathname === "/discord")) {
+    let body = "";
+    req.on("data", (d) => (body += d));
+    req.on("end", () => {
+      posts.push({ path: url.pathname, body: JSON.parse(body) });
+      send(200, { ok: true });
+    });
+    return;
   }
   const m = url.pathname.match(/^\/users\/([^/]+)\/referral$/);
   if (m) {
@@ -53,6 +63,11 @@ writeFileSync(
     `USERS_API_URL=http://127.0.0.1:${UP}`,
     `REFERRAL_CODE=REFCODE1`,
     `EXTENSION_IDS=testextensionid`,
+    `TELEGRAM_BOT_TOKEN=123:abc`,
+    `TELEGRAM_CHAT_ID=@worldterminal`,
+    `TELEGRAM_API_URL=http://127.0.0.1:${UP}/tg`,
+    `DISCORD_WEBHOOK_URL=http://127.0.0.1:${UP}/discord`,
+    `EXTENSION_STORE_URL=https://chromewebstore.google.com/detail/world-terminal/test`,
   ].join("\n"),
 );
 rmSync(".wrangler/state", { recursive: true, force: true });
@@ -114,6 +129,20 @@ try {
     assert.equal(r.body.status.state, "ok");
     assert.equal(r.body.status.events, events.length);
     assert.ok(r.body.status.markets > 20);
+  });
+
+  await check("new arbitrage is posted once to Telegram and Discord with the invite link", async () => {
+    const tg = posts.filter((p) => p.path === "/tg/bot123:abc/sendMessage");
+    const dc = posts.filter((p) => p.path === "/discord");
+    assert.equal(tg.length, 2, `telegram posts: ${tg.length}`);
+    assert.equal(dc.length, 2);
+    assert.equal(tg[0].body.chat_id, "@worldterminal");
+    assert.match(tg[0].body.text, /Arbitrage \+3¢/);
+    assert.match(tg[0].body.text, /\?ref=REFCODE1/);
+    assert.match(dc[0].body.embeds[0].url, /ref=REFCODE1/);
+    await fetch(`${BASE}/__scheduled?cron=*+*+*+*+*`);
+    await new Promise((r) => setTimeout(r, 1500));
+    assert.equal(posts.length, 4, "second poll must not repost the same signals");
   });
 
   await check("anonymous feed: top 10 rows, redacted signals", async () => {
@@ -206,6 +235,12 @@ try {
     const r = await get("/v1/stats");
     assert.equal(r.body.users, 3);
     assert.equal(r.body.pro, 1);
+  });
+  await check("sign-in routes are rate limited (20/min per IP)", async () => {
+    const codes = [];
+    for (let i = 0; i < 25; i++) codes.push((await post("/v1/auth/nonce", { wallet: fresh.address })).status);
+    assert.ok(codes.includes(429), `no 429 in ${codes.join(",")}`);
+    assert.equal((await get("/v1/health")).status, 200, "data routes use a separate limit");
   });
 } finally {
   try {

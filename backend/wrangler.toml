@@ -15,6 +15,10 @@ FREE_ROW_LIMIT = "10"
 # prediction-markets API key) set as the UPSTREAM_TOKEN secret. Empty = poller stays idle.
 UPSTREAM_URL = ""
 USERS_API_URL = "https://users-api.world.xyz/api/v1"
+# Signal bot: posts new arbitrage of at least this many cents to Telegram/Discord.
+BROADCAST_MIN_EDGE_CENTS = "1"
+# Chrome Web Store link included in bot posts (optional).
+EXTENSION_STORE_URL = ""
 # Extension origins allowed to receive sessions from /connect (chrome-extension://<id>), comma-separated.
 EXTENSION_IDS = ""
 
@@ -22,6 +26,8 @@ EXTENSION_IDS = ""
 #   SESSION_SECRET   random 32+ byte string used to sign session tokens (required)
 #   UPSTREAM_TOKEN   bearer token for UPSTREAM_URL (optional)
 #   USERS_API_TOKEN  bearer token for USERS_API_URL; without it the user's own World session is used
+#   TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID   post signals to a Telegram channel (optional)
+#   DISCORD_WEBHOOK_URL                      post signals to a Discord channel (optional)
 
 [[d1_databases]]
 binding = "DB"
@@ -32,3 +38,18 @@ migrations_dir = "migrations"
 [[kv_namespaces]]
 binding = "KV"
 id = "REPLACE_WITH_KV_ID"
+
+# Per-IP / per-wallet request limits (windows must be 10 or 60 seconds).
+[[ratelimits]]
+name = "AUTH_LIMITER"
+namespace_id = "1001"
+  [ratelimits.simple]
+  limit = 20
+  period = 60
+
+[[ratelimits]]
+name = "API_LIMITER"
+namespace_id = "1002"
+  [ratelimits.simple]
+  limit = 120
+  period = 60

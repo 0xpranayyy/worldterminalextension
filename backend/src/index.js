@@ -157,12 +157,24 @@ const routes = {
     new Response(connectPage(env), { headers: { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" } }),
 };
 
+// Sign-in routes get a tight per-IP limit; data routes are limited per wallet (or IP when anonymous).
+async function rateLimited(request, env, pathname) {
+  const ip = request.headers.get("CF-Connecting-IP") || "local";
+  if (pathname.startsWith("/v1/auth/")) {
+    return env.AUTH_LIMITER ? !(await env.AUTH_LIMITER.limit({ key: `ip:${ip}` })).success : false;
+  }
+  if (!env.API_LIMITER || pathname === "/connect") return false;
+  const s = await session(request, env);
+  return !(await env.API_LIMITER.limit({ key: s ? `w:${s.sub}` : `ip:${ip}` })).success;
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     const { pathname } = new URL(request.url);
     const handler = routes[`${request.method} ${pathname}`];
     if (!handler) return fail(404, "Not found.");
+    if (await rateLimited(request, env, pathname)) return json({ error: "Too many requests. Try again in a minute." }, 429, { "Retry-After": "60" });
     try {
       return await handler(request, env);
     } catch (err) {

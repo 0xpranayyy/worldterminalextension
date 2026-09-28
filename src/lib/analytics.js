@@ -141,6 +141,12 @@ export function findUnderround(events, { minOutcomes = 3, minEdge = 0.005 } = {}
         cost: +cost.toFixed(4),
         edge: +edge.toFixed(4),
         returnPct: +((edge / cost) * 100).toFixed(2),
+        imageUrl: ev.imageUrl || null,
+        closeMs: Math.max(...active.map((m) => toMs(m.closeTime) ?? toMs(m.expirationTime) ?? 0)) || null,
+        // Each outcome's YES ask, largest first, for the stacked cost bar.
+        legs: active
+          .map((m, i) => ({ title: m.yesSubTitle || m.title || m.ticker, ask: asks[i] }))
+          .sort((a, b) => b.ask - a.ask),
         note: "Buy YES on every outcome. Only risk-free if exactly one outcome must resolve YES — read the rules.",
       });
     }
@@ -157,6 +163,8 @@ export function findComplementArb(rows, { minEdge = 0.003 } = {}) {
     .map(({ r, cost }) => ({
       type: "complement",
       ticker: r.ticker,
+      yesAsk: r.yesAsk,
+      noAsk: r.noAsk,
       eventTicker: r.eventTicker,
       title: marketLabel(r),
       cost: +cost.toFixed(4),

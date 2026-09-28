@@ -72,6 +72,8 @@ test("findUnderround flags multi-outcome events priced under $1", () => {
   assert.equal(opps[0].eventTicker, "WC-WINNER");
   assert.equal(opps[0].cost, 0.96);
   assert.equal(opps[0].edge, 0.04);
+  assert.deepEqual(opps[0].legs.map((l) => l.title), ["FRA", "BRA", "ARG"]);
+  assert.equal(+opps[0].legs.reduce((s, l) => s + l.ask, 0).toFixed(4), 0.96);
 });
 
 test("findComplementArb requires YES+NO asks under $1", () => {

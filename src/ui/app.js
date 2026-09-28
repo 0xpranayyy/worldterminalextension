@@ -81,6 +81,16 @@ const ICONS = {
   grid: '<rect x="4" y="4" width="7" height="7" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="13" y="4" width="7" height="7" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="4" y="13" width="7" height="7" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="13" y="13" width="7" height="7" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.8"/>',
   spread: '<path d="M4 8h16M4 16h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 8v8" stroke="currentColor" stroke-width="1.8" stroke-dasharray="2 2.5"/>',
   bolt: '<path d="M13 3 5 13.5h6L10 21l8-10.5h-6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+  layers: '<path d="m12 4 8.5 4.5L12 13 3.5 8.5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m3.5 12.5 8.5 4.5 8.5-4.5M3.5 16l8.5 4.5 8.5-4.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+  split: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 3.5v17" stroke="currentColor" stroke-width="1.7"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" opacity=".35"/>',
+  clock: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
+  trend: '<path d="M4 16l5-5 3.5 3.5L20 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 7h5v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  info: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 11v5.5M12 7.8v.2" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>',
+  server: '<rect x="4" y="4.5" width="16" height="6" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="4" y="13.5" width="16" height="6" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M7.5 7.5h.01M7.5 16.5h.01" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>',
+  gauge: '<path d="M4 16a8 8 0 1 1 16 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="m12 16 4-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  globe: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><ellipse cx="12" cy="12" rx="3.8" ry="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 12h17" stroke="currentColor" stroke-width="1.7"/>',
+  shield: '<path d="M12 3.5 5 6v5.5c0 4.2 3 7.6 7 9 4-1.4 7-4.8 7-9V6z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+  wallet: '<rect x="3.5" y="6" width="17" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 9.5h17M16 14h1.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
   trash: '<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 const icon = (name) => h("svg", { viewBox: "0 0 24 24", "aria-hidden": "true", html: ICONS[name] });
@@ -395,100 +405,182 @@ function renderMarkets(view) {
 // ---------- signals ----------
 
 const SIGNALS = [
-  { id: "underround", label: "Outcome arb", help: "Buy YES on every outcome for less than the $1 payout. Risk-free only if exactly one outcome must win, so check the rules." },
-  { id: "complement", label: "YES+NO arb", help: "YES ask + NO ask under $1 on the same market: buy both and one side pays $1." },
-  { id: "favorites", label: "Closing favorites", help: "Outcomes priced 85–98.5¢ closing soon. Small, fast returns, but you lose the stake if wrong." },
-  { id: "movers", label: "Movers", help: "Biggest mid-price moves over roughly the last hour." },
+  { id: "underround", label: "Outcomes", icon: "layers", help: "Buy YES on every outcome for less than the $1 payout. Risk-free only if exactly one outcome must win, so read the rules." },
+  { id: "complement", label: "YES + NO", icon: "split", help: "YES ask + NO ask under $1 on the same market: buy both and one side pays $1." },
+  { id: "favorites", label: "Favorites", icon: "clock", help: "Outcomes priced 85–98.5¢ that close soon. Small, fast returns, but you lose the stake if wrong." },
+  { id: "movers", label: "Movers", icon: "trend", help: "The biggest mid-price moves over roughly the last hour." },
 ];
 
 function renderSignalChips() {
   const o = state.opportunities || {};
   $("#signal-chips").replaceChildren(
-    ...SIGNALS.map((s) =>
-      h(
-        "button",
-        {
-          class: `chip${state.signal === s.id ? " on" : ""}`,
-          onclick: () => {
-            state.signal = prefs.signal = s.id;
-            savePrefs();
-            renderSignalChips();
-            renderView();
+    h(
+      "div",
+      { class: "sig-tabs", role: "tablist" },
+      ...SIGNALS.map((s) => {
+        const n = (o[s.id] || []).length;
+        const arb = s.id === "underround" || s.id === "complement";
+        return h(
+          "button",
+          {
+            role: "tab",
+            "aria-selected": String(state.signal === s.id),
+            class: `sig-tab${state.signal === s.id ? " on" : ""}${arb && n ? " live" : ""}`,
+            onclick: () => {
+              state.signal = prefs.signal = s.id;
+              savePrefs();
+              renderSignalChips();
+              renderView();
+            },
           },
-        },
-        s.label,
-        (o[s.id] || []).length ? h("span", { class: "n" }, String(o[s.id].length)) : null,
-      ),
+          h("span", { class: "sig-tab-top" }, icon(s.icon), h("b", { class: "num" }, o[s.id] ? String(n) : "–")),
+          h("span", { class: "sig-tab-label" }, s.label),
+        );
+      }),
     ),
   );
 }
 
-function signalCard(o) {
+// Visual that explains each signal at a glance.
+function signalVisual(o) {
+  if (o.type === "underround" && o.legs?.length) {
+    const segs = o.legs.map((l, i) => h("span", { class: `seg s${Math.min(i, 5)}`, style: `width:${(l.ask * 100).toFixed(2)}%`, title: `${l.title} ${cents(l.ask)}` }));
+    const top = o.legs.slice(0, 3).map((l) => `${l.title} ${cents(l.ask)}`).join(" · ") + (o.legs.length > 3 ? ` · +${o.legs.length - 3} more` : "");
+    return h(
+      "div",
+      { class: "viz" },
+      h("div", { class: "stack" }, ...segs, h("span", { class: "seg edge-seg", style: `width:${(o.edge * 100).toFixed(2)}%` }), h("i", { class: "one" })),
+      h("div", { class: "viz-legend" }, h("span", { class: "ellip" }, top), h("span", { class: "num yes" }, `${cents1(o.cost)} → $1`)),
+    );
+  }
+  if (o.type === "complement") {
+    const yes = o.yesAsk ?? o.cost / 2;
+    return h(
+      "div",
+      { class: "viz" },
+      h("div", { class: "stack" }, h("span", { class: "seg yes-seg", style: `width:${(yes * 100).toFixed(2)}%` }), h("span", { class: "seg no-seg", style: `width:${((o.cost - yes) * 100).toFixed(2)}%` }), h("span", { class: "seg edge-seg", style: `width:${(o.edge * 100).toFixed(2)}%` }), h("i", { class: "one" })),
+      h("div", { class: "viz-legend" }, h("span", {}, "YES + NO"), h("span", { class: "num yes" }, `${cents1(o.cost)} → $1`)),
+    );
+  }
+  if (o.type === "favorite") {
+    return h(
+      "div",
+      { class: "viz" },
+      h("div", { class: "track" }, h("span", { class: "fill", style: `width:${(o.price * 100).toFixed(1)}%` })),
+      h("div", { class: "viz-legend" }, h("span", {}, `${o.side} at ${cents(o.price)} · pays $1`), h("span", { class: "num" }, `${o.hoursToClose}h left`)),
+    );
+  }
+  if (o.type === "mover") {
+    const lo = Math.min(o.from, o.to);
+    const hi = Math.max(o.from, o.to);
+    return h(
+      "div",
+      { class: "viz" },
+      h(
+        "div",
+        { class: "track" },
+        h("span", { class: `range ${o.move > 0 ? "up" : "down"}`, style: `left:${(lo * 100).toFixed(1)}%;width:${Math.max(1, (hi - lo) * 100).toFixed(1)}%` }),
+        h("i", { class: "dot-from", style: `left:${(o.from * 100).toFixed(1)}%` }),
+        h("i", { class: `dot-to ${o.move > 0 ? "up" : "down"}`, style: `left:${(o.to * 100).toFixed(1)}%` }),
+      ),
+      h("div", { class: "viz-legend" }, h("span", {}, `${cents(o.from)} → ${cents(o.to)}`), h("span", { class: "num" }, "last hour")),
+    );
+  }
+  return null;
+}
+
+function signalCard(o, { hero = false } = {}) {
   if (o.redacted) {
     return h(
       "div",
       { class: "scard" },
-      h("div", { class: "edge" }, h("b", {}, "+?¢"), h("small", {}, "Pro")),
-      h("div", {}, h("div", { class: "s-title" }, "Pro signal"), h("div", { class: "s-line" }, "Unlock to see this opportunity")),
+      h("div", { class: "s-head" }, h("span", { class: "avatar mono", style: "--h:220" }, "?"), h("div", { class: "s-main" }, h("div", { class: "s-title" }, "Pro signal"), h("div", { class: "s-sub" }, "Unlock to see this opportunity")), h("div", { class: "s-edge" }, h("b", {}, "+?¢"), h("small", {}, "edge"))),
+      h("div", { class: "viz" }, h("div", { class: "stack" }, h("span", { class: "seg s0", style: "width:45%" }), h("span", { class: "seg s1", style: "width:30%" }), h("span", { class: "seg s2", style: "width:20%" }))),
     );
   }
-  let edge, line;
-  if (o.type === "underround") {
-    edge = h("div", { class: "edge" }, h("b", {}, `+${cents1(o.edge)}`), h("small", {}, `${o.returnPct}%`));
-    line = `${o.outcomes} outcomes · cost ${cents1(o.cost)} per $1 set`;
-  } else if (o.type === "complement") {
-    edge = h("div", { class: "edge" }, h("b", {}, `+${cents1(o.edge)}`), h("small", {}, `${o.returnPct}%`));
-    line = `YES + NO cost ${cents1(o.cost)}`;
+  const row = o.ticker ? state.rows.find((r) => r.ticker === o.ticker) : null;
+  const av = avatar(row || { eventTicker: o.eventTicker, eventTitle: o.title, title: o.title, imageUrl: o.imageUrl });
+  let big, small, tone = "";
+  const pills = [];
+  if (o.type === "underround" || o.type === "complement") {
+    big = `+${cents1(o.edge)}`;
+    small = "per $1";
+    pills.push(h("span", { class: "pill good" }, `${o.returnPct}% return`));
+    if (o.type === "underround") pills.push(h("span", { class: "pill" }, `${o.outcomes} outcomes`));
+    if (o.closeMs) pills.push(h("span", { class: "pill" }, `closes ${closesIn((o.closeMs - Date.now()) / 3600000)}`));
   } else if (o.type === "favorite") {
-    edge = h("div", { class: "edge neutral" }, h("b", {}, `${o.returnPct}%`), h("small", {}, `${o.hoursToClose}h`));
-    line = `Buy ${o.side} @ ${cents(o.price)} · liquidity ${o.score}`;
+    big = `${o.returnPct}%`;
+    small = "if right";
+    tone = "accent";
+    pills.push(h("span", { class: "pill" }, `${o.side} ${cents(o.price)}`), h("span", { class: "pill" }, `liq ${o.score}`));
   } else {
     const up = o.move > 0;
-    edge = h("div", { class: `edge ${up ? "" : "down"}` }, h("b", {}, `${up ? "+" : "−"}${Math.abs(Math.round(o.move * 100))}¢`), h("small", {}, up ? "up" : "down"));
-    line = `${cents(o.from)} → ${cents(o.to)}`;
+    big = `${up ? "+" : "−"}${Math.abs(Math.round(o.move * 100))}¢`;
+    small = "1h move";
+    tone = up ? "" : "down";
+    pills.push(h("span", { class: `pill ${up ? "good" : "bad"}` }, up ? "rising" : "falling"));
   }
   const open = () => (o.ticker ? openSheet({ type: "market", ticker: o.ticker }) : chrome.tabs.create({ url: eventUrl(o.eventTicker) }));
+  const share = h(
+    "button",
+    {
+      class: "icon-btn s-share",
+      title: "Share",
+      "aria-label": "Share this signal",
+      onclick: (e) => {
+        e.stopPropagation();
+        openSheet({ type: "share", kind: "signal", signal: o });
+      },
+    },
+    icon("share"),
+  );
+  const subtitle = row && row.eventTitle !== row.title ? row.eventTitle : o.type === "underround" ? "Multi-outcome event" : categoryName(row?.category || "");
   return h(
     "div",
-    { class: "scard", role: "button", tabindex: "0", onclick: open, onkeydown: (e) => e.key === "Enter" && open() },
-    edge,
-    h("div", { style: "min-width:0" }, h("div", { class: "s-title" }, o.title), h("div", { class: "s-line" }, line)),
+    { class: `scard${hero ? " top-pick" : ""}`, role: "button", tabindex: "0", onclick: open, onkeydown: (e) => e.key === "Enter" && open() },
+    hero ? h("div", { class: "hero-eyebrow" }, icon("bolt"), "Best right now") : null,
     h(
-      "button",
-      {
-        class: "icon-btn s-share",
-        title: "Share",
-        "aria-label": "Share this signal",
-        onclick: (e) => {
-          e.stopPropagation();
-          openSheet({ type: "share", kind: "signal", signal: o });
-        },
-      },
-      icon("share"),
+      "div",
+      { class: "s-head" },
+      av,
+      h("div", { class: "s-main" }, h("div", { class: "s-title" }, row ? row.title : o.title), h("div", { class: "s-sub" }, subtitle)),
+      h("div", { class: `s-edge ${tone}` }, h("b", {}, big), h("small", {}, small)),
     ),
+    signalVisual(o),
+    h("div", { class: "s-foot" }, h("div", { class: "pills" }, ...pills), share),
   );
 }
 
 function renderSignals(view) {
   const def = SIGNALS.find((s) => s.id === state.signal) || SIGNALS[0];
-  view.append(h("div", { class: "signal-help" }, def.help));
+  view.append(h("div", { class: "sig-help" }, icon("info"), h("span", {}, def.help)));
   if (!state.opportunities) {
     view.append(...(state.status?.state === "ok" ? skeleton(4) : [emptyState("radar", "Waiting for World data", "Signals appear after the first scan.")]));
     return;
   }
   const list = state.opportunities[def.id] || [];
   if (!list.length) {
-    view.append(emptyState("radar", "Nothing right now", `Rescanning every ${state.settings.refreshMinutes} min. Turn on signal notifications in Settings.`));
+    view.append(
+      h(
+        "div",
+        { class: "scanning" },
+        h("div", { class: "radar", "aria-hidden": "true" }, h("i"), h("i"), h("span", { class: "sweep" })),
+        h("b", {}, "Nothing right now"),
+        h("span", {}, `Scanning ${compact(state.status?.markets || state.rows.length)} markets every ${state.settings.refreshMinutes} min.`),
+        state.settings.notifySignals ? null : h("button", { class: "linkish", onclick: () => openSheet({ type: "settings" }) }, "Get notified when one appears"),
+      ),
+    );
     return;
   }
   if (!state.unlocked) {
     view.append(
-      h("div", { class: "blur" }, ...list.slice(0, 3).map(signalCard)),
+      h("div", { class: "blur" }, ...list.slice(0, 2).map((o) => signalCard(o))),
       gate(`${list.length} live signal${list.length === 1 ? "" : "s"} found`, "Unlock Pro to see them and get notified the moment new ones appear."),
     );
     return;
   }
-  view.append(...list.map(signalCard));
+  view.append(signalCard(list[0], { hero: true }));
+  if (list.length > 1) view.append(h("div", { class: "section-label" }, h("span", {}, `${list.length - 1} more`), h("span", {}, "by edge")), ...list.slice(1).map((o) => signalCard(o)));
 }
 
 // ---------- watchlist ----------
@@ -1040,123 +1132,167 @@ function perks() {
 
 function settingsSheet() {
   const s = state.settings;
-  const save = async (patch) => {
-    await chrome.storage.local.set({ settings: { ...s, ...patch } });
-    toast("Saved");
+  let savedTimer;
+  const save = async (patch, quiet = false) => {
+    Object.assign(state.settings, patch);
+    await chrome.storage.local.set({ settings: { ...state.settings } });
+    if (!quiet) {
+      clearTimeout(savedTimer);
+      savedTimer = setTimeout(() => toast("Saved"), 250);
+    }
   };
   const sw = (key) =>
     h("label", { class: "switch" }, h("input", { type: "checkbox", id: `set-${key}`, checked: !!s[key], onchange: (e) => save({ [key]: e.target.checked }) }), h("span"));
-  const num = (key, min, max, step = 1) =>
-    h("input", {
-      type: "number",
-      id: `set-${key}`,
-      min,
-      max,
-      step,
-      value: s[key],
-      onchange: (e) => {
-        const v = Math.min(max, Math.max(min, Number(e.target.value) || s[key]));
-        e.target.value = v;
-        save({ [key]: v });
-      },
-    });
-  const row = (k, hint, control) => h("div", { class: "set-row" }, h("div", {}, h("div", { class: "k" }, k), hint ? h("div", { class: "h" }, hint) : null), control);
+  // − value + stepper with a unit; saves after the user stops clicking.
+  const stepper = (key, { min, max, step = 1, unit = "" }) => {
+    const out = h("output", { class: "num", id: `set-${key}` });
+    const show = () => (out.textContent = `${+Number(s[key]).toFixed(step < 1 ? 1 : 0)}${unit}`);
+    let t;
+    const bump = (dir) => {
+      const v = Math.min(max, Math.max(min, +(Number(s[key]) + dir * step).toFixed(2)));
+      s[key] = v;
+      show();
+      clearTimeout(t);
+      t = setTimeout(() => save({ [key]: v }), 450);
+    };
+    show();
+    return h(
+      "div",
+      { class: "stepper" },
+      h("button", { "aria-label": "Decrease", onclick: () => bump(-1) }, "−"),
+      out,
+      h("button", { "aria-label": "Increase", onclick: () => bump(1) }, "+"),
+    );
+  };
+  const segmented = (key, values, fmt) =>
+    h(
+      "div",
+      { class: "seg", role: "group" },
+      ...values.map((v) =>
+        h(
+          "button",
+          {
+            "aria-pressed": String(s[key] === v),
+            onclick: (e) => {
+              for (const b of e.currentTarget.parentElement.children) b.setAttribute("aria-pressed", String(b === e.currentTarget));
+              save({ [key]: v });
+            },
+          },
+          fmt(v),
+        ),
+      ),
+    );
+  const row = (ic, k, hint, control) =>
+    h("div", { class: "set-row" }, h("span", { class: "set-ic" }, icon(ic)), h("div", { class: "set-text" }, h("div", { class: "k" }, k), hint ? h("div", { class: "h" }, hint) : null), control);
+  const section = (title, ...rows) => h("div", { class: "sheet-section" }, h("div", { class: "label" }, title), h("div", { class: "set-group" }, ...rows));
+
   const auth = state.auth;
   const connected = auth && auth.expiry > Date.now();
+  const hoursLeft = connected ? Math.max(1, Math.round((auth.expiry - Date.now()) / 3600000)) : 0;
+  const st = state.status;
+  const source = { direct: "World API", relay: "via world.xyz tab", backend: "World Terminal cloud" }[st?.source];
+
+  const planCard = DEV_BUILD
+    ? h("div", { class: "acct-card dev" }, h("span", { class: "acct-badge" }, icon("crown")), h("div", {}, h("div", { class: "acct-k" }, "Plan"), h("b", {}, "Developer"), h("span", {}, "Pro unlocked for testing")))
+    : state.unlocked
+    ? h(
+        "div",
+        { class: "acct-card pro" },
+        h("span", { class: "acct-badge" }, icon("crown")),
+        h("div", {}, h("div", { class: "acct-k" }, "Plan"), h("b", {}, "Pro"), h("span", { class: "num" }, state.unlock?.wallet ? `${state.unlock.wallet.slice(0, 4)}…${state.unlock.wallet.slice(-4)}` : "Active")),
+      )
+    : h(
+        "button",
+        { class: "acct-card free", onclick: () => openSheet({ type: "unlock" }) },
+        h("span", { class: "acct-badge" }, icon("crown")),
+        h("div", {}, h("div", { class: "acct-k" }, "Plan"), h("b", {}, "Free"), h("span", { class: "gold-text" }, "Unlock Pro →")),
+      );
+  const connCard = h(
+    connected ? "div" : "a",
+    connected ? { class: "acct-card conn ok" } : { class: "acct-card conn", href: WORLD_ORIGIN, target: "_blank", rel: "noopener" },
+    h("span", { class: "acct-badge" }, h("span", { class: `dot ${connected ? "" : "warn"}` })),
+    h("div", {}, h("div", { class: "acct-k" }, "World"), h("b", {}, connected ? "Connected" : "Not connected"), h("span", {}, connected ? `${source || "Live"} · ${hoursLeft}h left` : "Open world.xyz →")),
+  );
 
   return [
-    sheetHead("Settings", `World Terminal ${chrome.runtime.getManifest().version}`),
-    h(
-      "div",
-      { class: "sheet-section" },
-      h("div", { class: "label" }, "Data"),
-      h(
-        "div",
-        { class: "set-group" },
-        row(
-          "Refresh every",
-          "How often markets are rescanned",
-          h(
-            "select",
-            { id: "set-refresh", onchange: (e) => save({ refreshMinutes: Number(e.target.value) }) },
-            ...[1, 2, 5, 10].map((m) => h("option", { value: m, selected: s.refreshMinutes === m }, `${m} min`)),
-          ),
-        ),
-        row(
-          "Solana RPC",
-          "Used to read your positions",
-          h("input", {
-            type: "text",
-            id: "set-rpc",
-            value: s.rpcUrl,
-            spellcheck: "false",
-            style: "width:170px;font-family:var(--mono);font-size:11px",
-            onchange: (e) => {
-              const v = e.target.value.trim();
-              if (/^https:\/\/\S+$/.test(v)) save({ rpcUrl: v });
-              else {
-                e.target.value = s.rpcUrl;
-                toast("Enter an https:// RPC URL");
-              }
-            },
-          }),
-        ),
-        row(
-          "World connection",
-          connected ? `Session valid for ${Math.max(1, Math.round((auth.expiry - Date.now()) / 3600000))}h` : "Open world.xyz to connect",
-          connected ? h("span", { class: "yes", style: "font-weight:600;font-size:12px" }, "Connected") : h("a", { class: "btn", href: WORLD_ORIGIN, target: "_blank", rel: "noopener" }, "Connect"),
-        ),
+    sheetHead("Settings", `World Terminal ${chrome.runtime.getManifest().version}${DEV_BUILD ? " · developer build" : ""}`),
+    h("div", { class: "acct" }, planCard, connCard),
+    section(
+      "Data",
+      row("refresh", "Refresh markets", "How often World is rescanned", segmented("refreshMinutes", [1, 2, 5, 10], (v) => `${v}m`)),
+      row(
+        "server",
+        "Solana RPC",
+        "Reads your positions for Portfolio",
+        h("input", {
+          type: "text",
+          id: "set-rpc",
+          class: "rpc",
+          value: s.rpcUrl,
+          spellcheck: "false",
+          onchange: (e) => {
+            const v = e.target.value.trim();
+            if (/^https:\/\/\S+$/.test(v)) save({ rpcUrl: v });
+            else {
+              e.target.value = s.rpcUrl;
+              toast("Enter an https:// RPC URL");
+            }
+          },
+        }),
       ),
     ),
-    h(
-      "div",
-      { class: "sheet-section" },
-      h("div", { class: "label" }, "Notifications"),
-      h("div", { class: "set-group" }, row("Price alerts", "Notify when an alert price is hit", sw("notifyAlerts")), row("New arbitrage", "Pro · notify on new arbitrage signals", sw("notifySignals"))),
+    section(
+      "Notifications",
+      row("bell", "Price alerts", "When an outcome hits your price", sw("notifyAlerts")),
+      row("bolt", "New arbitrage", "The moment a new one appears · Pro", sw("notifySignals")),
     ),
-    h(
-      "div",
-      { class: "sheet-section" },
-      h("div", { class: "label" }, "Signal thresholds"),
+    section(
+      "Signal thresholds",
+      row("layers", "Minimum arbitrage edge", "Profit per $1 set", stepper("minEdgeCents", { min: 0.1, max: 10, step: 0.1, unit: "¢" })),
+      row("clock", "Favorites priced from", "Lowest price counted", stepper("favoriteMinCents", { min: 70, max: 98, unit: "¢" })),
+      row("clock", "Favorites closing within", "Time to close", stepper("favoriteMaxHours", { min: 1, max: 168, unit: "h" })),
+      row("trend", "Mover threshold", "Move in about an hour", stepper("moverCents", { min: 1, max: 30, unit: "¢" })),
+    ),
+    section(
+      "Shortcuts",
       h(
         "div",
-        { class: "set-group" },
-        row("Minimum arbitrage edge", "In cents per $1", num("minEdgeCents", 0.1, 10, 0.1)),
-        row("Favorites from", "Lowest price counted, in cents", num("favoriteMinCents", 70, 98)),
-        row("Favorites close within", "Hours", num("favoriteMaxHours", 1, 168)),
-        row("Mover threshold", "Cents moved in ~1h", num("moverCents", 1, 30)),
-      ),
-    ),
-    h(
-      "div",
-      { class: "sheet-section" },
-      h("div", { class: "label" }, "Account"),
-      h(
-        "div",
-        { class: "set-group" },
-        DEV_BUILD
-          ? row("Developer build", "No invite code set. Pro is unlocked for testing; store packaging is blocked.", h("span", { class: "dev-chip" }, "DEV"))
-          : state.unlocked
-          ? row(
-              "Pro · active",
-              `${state.unlock.wallet.slice(0, 6)}…${state.unlock.wallet.slice(-4)}`,
-              h(
-                "button",
-                {
-                  class: "btn",
-                  onclick: async () => {
-                    await send({ type: "signOut" });
-                    toast("Signed out");
-                  },
-                },
-                "Sign out",
-              ),
-            )
-          : row("Free plan", "Unlock Pro with our invite", h("button", { class: "btn gold", onclick: () => openSheet({ type: "unlock" }) }, "Unlock")),
-        row("Keyboard", "/ search · ↑↓ move · Enter open · R refresh · Esc close", h("span")),
+        { class: "keys-grid" },
+        ...[
+          [["Alt", "W"], "Open World Terminal"],
+          [["/"], "Search markets"],
+          [["↑", "↓"], "Move through markets"],
+          [["Enter"], "Open market"],
+          [["R"], "Refresh"],
+          [["Esc"], "Close"],
+        ].map(([keys, label]) => h("div", { class: "key-row" }, h("span", {}, label), h("span", { class: "keys" }, ...keys.map((k) => h("kbd", {}, k))))),
       ),
     ),
     diagnosticsSection(),
+    section(
+      "About",
+      row("globe", "Replay setup", "Walk through onboarding again", h("button", { class: "btn", onclick: () => chrome.tabs.create({ url: chrome.runtime.getURL("src/ui/welcome.html") }) }, "Open")),
+      row("shield", "Privacy", "What World Terminal stores and sends", h("a", { class: "btn", href: "https://github.com/0xpranayyy/worldterminalextension/blob/main/PRIVACY.md", target: "_blank", rel: "noopener" }, "Read")),
+      row("info", "Help & feedback", "Report a bug or ask a question", h("a", { class: "btn", href: "https://github.com/0xpranayyy/worldterminalextension/issues", target: "_blank", rel: "noopener" }, "Contact")),
+      state.unlocked && !DEV_BUILD
+        ? row(
+            "wallet",
+            "Sign out",
+            "Back to the Free plan on this browser",
+            h(
+              "button",
+              {
+                class: "btn",
+                onclick: async () => {
+                  await send({ type: "signOut" });
+                  toast("Signed out");
+                },
+              },
+              "Sign out",
+            ),
+          )
+        : null,
+    ),
     h("p", { class: "fineprint" }, "Not affiliated with World. Nothing here is financial advice. Links to world.xyz include our invite code."),
   ];
 }
@@ -1164,40 +1300,43 @@ function settingsSheet() {
 function diagnosticsSection() {
   const st = state.status;
   const source = { direct: "World API", relay: "World API via world.xyz tab", backend: "World Terminal cloud" }[st?.source] || "—";
+  const left = state.auth ? state.auth.expiry - Date.now() : 0;
   const kv = (k, v, cls = "") => h("div", { class: "diag-row" }, h("span", { class: "faint" }, k), h("span", { class: `num ${cls}` }, v));
-  const box = h(
-    "div",
-    { class: "set-group diag" },
-    kv("State", st?.state || "not started", st?.state === "ok" ? "yes" : "warn"),
-    kv("Data source", source),
-    kv("Last update", st?.at ? ago(st.at) : "never"),
-    kv("Markets", String(state.rows.length)),
-    kv("World session", state.auth ? (state.auth.expiry > Date.now() ? (state.auth.expiry - Date.now() > 90 * 60000 ? `${Math.round((state.auth.expiry - Date.now()) / 3600000)}h left` : `${Math.round((state.auth.expiry - Date.now()) / 60000)} min left`) : "expired") : "not connected", state.auth?.expiry > Date.now() ? "" : "warn"),
-    st?.state && st.state !== "ok" ? kv("Error", st.message || "—", "no") : null,
-  );
   return h(
     "div",
     { class: "sheet-section" },
-    h("div", { class: "label" }, "Diagnostics"),
-    box,
     h(
-      "button",
-      {
-        class: "btn block",
-        style: "margin-top:8px",
-        onclick: async () => {
-          const info = await send({ type: "diagnostics" });
-          try {
-            await navigator.clipboard.writeText("World Terminal debug info\n" + JSON.stringify(info, null, 2));
-            toast("Debug info copied. Paste it to your developer");
-          } catch {
-            toast("Couldn't copy");
-          }
+      "details",
+      { class: "diag-box" },
+      h("summary", {}, h("span", { class: "set-ic" }, icon("gauge")), h("span", {}, "Diagnostics"), h("span", { class: `diag-state ${st?.state === "ok" ? "yes" : "warn"}` }, st?.state === "ok" ? "All good" : st?.state || "idle")),
+      h(
+        "div",
+        { class: "diag" },
+        kv("State", st?.state || "not started", st?.state === "ok" ? "yes" : "warn"),
+        kv("Data source", source),
+        kv("Last update", st?.at ? ago(st.at) : "never"),
+        kv("Markets", String(state.rows.length)),
+        kv("World session", state.auth ? (left > 0 ? (left > 90 * 60000 ? `${Math.round(left / 3600000)}h left` : `${Math.round(left / 60000)} min left`) : "expired") : "not connected", left > 0 ? "" : "warn"),
+        st?.state && st.state !== "ok" ? kv("Error", st.message || "—", "no") : null,
+      ),
+      h(
+        "button",
+        {
+          class: "btn block",
+          onclick: async () => {
+            const info = await send({ type: "diagnostics" });
+            try {
+              await navigator.clipboard.writeText("World Terminal debug info\n" + JSON.stringify(info, null, 2));
+              toast("Debug info copied");
+            } catch {
+              toast("Couldn't copy");
+            }
+          },
         },
-      },
-      "Copy debug info",
+        "Copy debug info",
+      ),
+      h("p", { class: "fineprint", style: "text-align:left;margin:8px 2px 0" }, "Never includes your World session token or wallet keys."),
     ),
-    h("p", { class: "fineprint", style: "text-align:left;margin:8px 2px 0" }, "Debug info never includes your World session token or wallet keys."),
   );
 }
 

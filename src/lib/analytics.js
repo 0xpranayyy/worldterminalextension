@@ -71,6 +71,10 @@ export function flattenMarkets(events, now = Date.now()) {
       const mid = yesBid !== null && yesAsk !== null ? (yesBid + yesAsk) / 2 : yesAsk ?? yesBid;
       const closeMs = toMs(m.closeTime) ?? toMs(m.expirationTime);
       const volume24h = ev.markets.length === 1 ? ev.volume24h ?? 0 : null;
+      // Position tokens: one YES/NO mint pair per settlement currency.
+      const accts = Object.values(m.accounts || {});
+      const yesMints = accts.map((a) => a.yesMint).filter(Boolean);
+      const noMints = accts.map((a) => a.noMint).filter(Boolean);
       const row = {
         ticker: m.ticker,
         eventTicker: ev.ticker || m.eventTicker,
@@ -89,6 +93,8 @@ export function flattenMarkets(events, now = Date.now()) {
         eventVolume24h: ev.volume24h || 0,
         eventLiquidity: ev.liquidity || 0,
         openInterest: m.openInterest || 0,
+        yesMints,
+        noMints,
         closeMs,
         hoursToClose: closeMs ? (closeMs - now) / HOUR : null,
       };

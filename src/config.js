@@ -31,6 +31,8 @@ export const DEFAULT_SETTINGS = {
   favoriteMinCents: 85,
   favoriteMaxHours: 48,
   moverCents: 5,
+  // Public endpoint; users can switch to their own (e.g. Helius) in Settings if it rate limits.
+  rpcUrl: "https://api.mainnet-beta.solana.com",
 };
 
 export const WORLD_ORIGIN = "https://world.xyz";

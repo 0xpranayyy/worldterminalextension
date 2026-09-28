@@ -5,12 +5,25 @@ import { chromium } from "playwright";
 import { mkdirSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { sampleState } from "./sample-data.mjs";
+import { createServer } from "node:http";
+import { sampleState, sampleRpcReply } from "./sample-data.mjs";
 
 const root = resolve(new URL("..", import.meta.url).pathname);
 const out = join(root, "store/screenshots");
 const raw = join(out, "raw");
 mkdirSync(raw, { recursive: true });
+
+// Mock Solana RPC for the Portfolio tab (CORS-enabled like public RPCs).
+const rpc = createServer((req, res) => {
+  const headers = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "content-type", "Content-Type": "application/json" };
+  if (req.method === "OPTIONS") return res.writeHead(204, headers).end();
+  let body = "";
+  req.on("data", (d) => (body += d));
+  req.on("end", () => {
+    const calls = JSON.parse(body);
+    res.writeHead(200, headers).end(JSON.stringify(sampleRpcReply(calls.map((c) => c.id))));
+  });
+}).listen(8899);
 
 const profile = join(tmpdir(), `wt-shots-${Date.now()}`);
 const executablePath = process.env.CHROMIUM_PATH || (existsSync("/opt/pw-browsers/chromium-1194/chrome-linux/chrome") ? "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" : undefined);
@@ -44,6 +57,7 @@ async function seed(p, { pro }) {
       await chrome.storage.local.clear();
       await chrome.storage.local.set({
         ...s,
+        settings: { rpcUrl: "http://127.0.0.1:8899" },
         ...(pro ? { unlock: { ok: true, wallet: "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs", referredBy: "SAMPLE01", verifiedAt: Date.now() } } : {}),
       });
     },
@@ -94,6 +108,10 @@ await shot(p, "movers");
 await p.click('[data-tab="watch"]');
 await p.waitForTimeout(300);
 await shot(p, "watchlist");
+await p.click('[data-tab="portfolio"]');
+await p.waitForSelector(".pf-row", { timeout: 8000 });
+await p.waitForTimeout(300);
+await shot(p, "portfolio");
 await p.click("#btn-settings");
 await p.waitForTimeout(400);
 await shot(p, "settings");
@@ -136,7 +154,7 @@ const frames = [
   ["01-markets", "markets", "Every World market,<br>ranked by liquidity.", "Spread, volume and open interest rolled into one score, refreshed every minute."],
   ["02-detail", "detail", "Know the price<br>before you trade.", "Live YES/NO quotes, a price chart, and why each market scores the way it does."],
   ["03-signals", "signals", "Arbitrage,<br>found for you.", "Outcome sets and YES+NO pairs priced under the $1 payout, plus closing favorites and movers."],
-  ["04-watchlist", "watchlist", "Alerts that<br>reach you first.", "Star markets, set YES/NO price alerts, and get desktop notifications."],
+  ["04-portfolio", "portfolio", "Your positions,<br>valued live.", "What every World position would sell for right now, and which ones are hard to exit."],
 ];
 p = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
 for (const [name, src, title, sub] of frames) {
@@ -157,6 +175,7 @@ for (const [name, src, title, sub] of frames) {
   await p.screenshot({ path: join(out, "05-overlay.png") });
 }
 await browser.close();
+rpc.close();
 if (errors.length) {
   console.error("Page errors:\n" + errors.join("\n"));
   process.exit(1);

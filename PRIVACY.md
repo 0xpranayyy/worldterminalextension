@@ -12,6 +12,7 @@ World Terminal is a Chrome extension that shows World (world.xyz) prediction mar
 | Market prices and price history | To rank markets, draw charts and find signals | Stored in your browser |
 | Your watchlist, alerts and settings | So they persist | Stored in your browser |
 | A wallet address you type in to unlock Pro | To ask World whether that wallet joined through our invite | Stored in your browser. Sent only to World's API (`users-api.world.xyz`). |
+| That wallet's public token balances | To show your World positions in the Portfolio tab | Read from a Solana RPC (default `api.mainnet-beta.solana.com`, or the one you set). Not stored. |
 
 ## What the extension does not do
 

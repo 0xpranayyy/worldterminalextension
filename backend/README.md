@@ -17,6 +17,8 @@ A Cloudflare Worker that gives World Terminal one shared market poller, wallet s
 | **Shared poller** | A cron job fetches the market feed once a minute for everyone, scores it with the same `src/lib/analytics.js` the extension uses, and stores the result in KV. |
 | **Server-side Pro** | `/v1/feed` returns the top 10 markets and hidden signal placeholders to free users. Pro users get everything. Free clients never receive Pro data. |
 | **Wallet sign-in** | `/connect` signs a one-time nonce with Phantom, Solflare or Backpack. The server checks the ed25519 signature, looks up the wallet's World referral, and hands the extension a 30-day HMAC session. |
+| **Signal bot** | New arbitrage worth at least `BROADCAST_MIN_EDGE_CENTS` is posted to Telegram and/or Discord with your invite link, once per signal per day. |
+| **Rate limits** | 20 sign-in requests per minute per IP; 120 data requests per minute per wallet (or IP). |
 | **Price history** | Mid prices every 10 minutes for 7 days in D1 (`/v1/history`, Pro). |
 
 ## API
@@ -73,13 +75,25 @@ Needs the Workers Paid plan ($5/month): the snapshot writes (~288k rows/day at 2
 ## Tests
 
 ```bash
-npm test                        # 15 checks: poller, free vs Pro feed, sign-in, bad signatures, nonce reuse, forged sessions
+npm test                        # 17 checks: poller, signal bot, free vs Pro feed, sign-in, bad signatures, nonce reuse, forged sessions, rate limits
 npm run test:extension     # 7 checks: real extension + local Worker, including wallet sign-in handoff
 ```
 
 Both run the Worker locally (`wrangler dev`, local D1 and KV) against a mock upstream, and need no Cloudflare account.
 
+## Signal bot setup (optional)
+
+- **Telegram:**
+  1. Message @BotFather, send `/newbot` and copy the token.
+  2. Add the bot as an admin of your channel.
+  3. Run `npx wrangler secret put TELEGRAM_BOT_TOKEN`.
+  4. Run `npx wrangler secret put TELEGRAM_CHAT_ID`. The chat ID is `@yourchannel`, or the numeric ID for a private group.
+- **Discord:**
+  1. In the channel, open Settings → Integrations → Webhooks → New Webhook, and copy its URL.
+  2. Run `npx wrangler secret put DISCORD_WEBHOOK_URL`.
+- Set `EXTENSION_STORE_URL` in `wrangler.toml` once you're on the Chrome Web Store, so every post links to the extension.
+
+The bot only posts when the poller has data, which means it needs `UPSTREAM_URL`.
+
 ## Not built yet
-- Rate limiting per IP or wallet (add Cloudflare's rate-limiting binding before launch).
 - Live push over WebSocket or Durable Objects. Clients poll `/v1/feed` on their refresh interval.
-- Per-user signal thresholds. The server uses the default thresholds.

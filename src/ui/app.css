@@ -227,3 +227,15 @@ body.panel { width: auto; height: 100vh; }
 .share-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
 .share-actions .btn.primary { grid-column: span 3; }
 .share-actions .btn.lg:not(.primary) { font-size: 12.5px; padding: 0 8px; }
+
+.pf-kpis { padding: 0 0 6px; }
+.pf-form { display: flex; gap: 6px; padding: 0 8px; }
+.pf-row { grid-template-columns: 1fr auto; }
+.pf-error { margin: 4px 8px 8px; padding: 9px 11px; border-radius: 10px; background: var(--no-soft); color: var(--no); font-size: 12px; }
+.side-pill { font: 700 9.5px/1 var(--mono); padding: 3px 5px; border-radius: 5px; letter-spacing: 0.04em; flex: none; }
+.side-pill.yes { background: var(--yes-soft); color: var(--yes); }
+.side-pill.no { background: var(--no-soft); color: var(--no); }
+.linkish { background: none; border: 0; padding: 0; color: var(--accent-2); font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+.linkish:disabled { color: var(--text-3); cursor: default; }
+.tabs button { font-size: 12px; }
+.section-label .case { text-transform: none; letter-spacing: 0.02em; font-family: var(--mono); }

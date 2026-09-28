@@ -1,5 +1,6 @@
 import { CONFIG, DEFAULT_SETTINGS, normalizeCode, eventUrl, inviteUrl } from "./config.js";
 import { AuthRequiredError, fetchActiveEvents, fetchReferralStatus } from "./lib/api.js";
+import { fetchBalances, matchPositions } from "./lib/portfolio.js";
 import {
   flattenMarkets,
   findUnderround,
@@ -48,8 +49,14 @@ chrome.alarms.onAlarm.addListener((a) => {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
   if (changes.settings) {
-    scheduleAlarm();
-    refresh().catch(() => {});
+    // Only settings that change what we fetch or compute need a rescan.
+    const DATA_KEYS = ["refreshMinutes", "minEdgeCents", "favoriteMinCents", "favoriteMaxHours", "moverCents"];
+    const before = changes.settings.oldValue || {};
+    const after = changes.settings.newValue || {};
+    if (DATA_KEYS.some((k) => before[k] !== after[k])) {
+      scheduleAlarm();
+      refresh().catch(() => {});
+    }
   }
   if (changes.unlock || changes.opportunities || changes.status) updateBadge();
 });
@@ -303,6 +310,17 @@ const handlers = {
     url.searchParams.set("ext", chrome.runtime.id);
     if (token) url.hash = `wt=${encodeURIComponent(token)}`;
     return { ok: true, url: url.toString(), connected: !!token };
+  },
+  async portfolio({ wallet }) {
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(String(wallet || ""))) return { ok: false, reason: "Enter a Solana wallet address." };
+    const settings = await getSettings();
+    const { rows = [] } = await store.get("rows");
+    try {
+      const balances = await fetchBalances(settings.rpcUrl, wallet);
+      return { ok: true, wallet, at: Date.now(), tokens: balances.length, ...matchPositions(balances, rows) };
+    } catch (err) {
+      return { ok: false, reason: err.message };
+    }
   },
   async addAlert({ alert }) {
     const { alerts = [] } = await store.get("alerts");

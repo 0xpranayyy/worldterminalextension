@@ -19,6 +19,8 @@ _Screenshots use sample data (`scripts/sample-data.mjs`), not live World prices.
 | Signals: outcome arbitrage, YES+NO arbitrage, closing favorites, movers | Blurred count | ✓ |
 | Watchlist and YES/NO price alerts (desktop notifications) | | ✓ |
 | New-arbitrage notifications and toolbar badge count | | ✓ |
+| Portfolio: every World position in the wallet, exit value at the bid, thin-exit warnings | | ✓ |
+| Share cards: 1200×630 image of any market or signal with your invite link, Post on X | ✓ | ✓ |
 | Stats panel on world.xyz event pages | Unlock prompt | ✓ |
 | Settings: refresh rate, notifications, signal thresholds | ✓ | ✓ |
 
@@ -28,7 +30,7 @@ Every "Trade on World" link opens `https://world.xyz/event/<ticker>?ref=<YOUR_CO
 
 ## v1 backend (optional)
 
-[`backend/`](backend/) is a Cloudflare Worker with one shared market poller, wallet sign-in, and Pro gating enforced on the server. Set `BACKEND_URL` in `src/config.js` to use it. The extension falls back to loading World directly whenever the backend has no data. It needs official feed access to poll markets; see [backend/README.md](backend/README.md).
+[`backend/`](backend/) is a Cloudflare Worker with one shared market poller, wallet sign-in, Pro gating enforced on the server, rate limiting, and a Telegram/Discord bot that posts new arbitrage with your invite link. Set `BACKEND_URL` in `src/config.js` to use it. The extension falls back to loading World directly whenever the backend has no data. It needs official feed access to poll markets; see [backend/README.md](backend/README.md).
 
 ## Publishing
 

@@ -137,3 +137,35 @@ test("scoreParts exposes the components of the liquidity score", () => {
   assert.equal(p.tight, 0.5);
   assert.equal(p.vol, 0);
 });
+
+test("matchPositions values holdings at the bid and flags thin exits", async () => {
+  const { matchPositions } = await import("../src/lib/portfolio.js");
+  const rows = [
+    { ticker: "A", eventTicker: "E", title: "A", eventTitle: "E", yesBid: 0.4, yesAsk: 0.41, noBid: 0.58, noAsk: 0.6, yesMints: ["ya"], noMints: ["na"] },
+    { ticker: "B", eventTicker: "E", title: "B", eventTitle: "E", yesBid: 0.1, yesAsk: 0.2, noBid: null, noAsk: 0.9, yesMints: ["yb"], noMints: ["nb"] },
+  ];
+  const p = matchPositions(
+    [
+      { mint: "ya", amount: 100 },
+      { mint: "nb", amount: 50 },
+      { mint: "yb", amount: 10 },
+      { mint: "unrelated", amount: 5 },
+    ],
+    rows,
+  );
+  assert.equal(p.positions.length, 3);
+  assert.equal(p.exitValue, 100 * 0.4 + 10 * 0.1);
+  assert.equal(p.maxPayout, 160);
+  assert.equal(p.positions.find((x) => x.side === "NO").thin, true); // no bid
+  assert.equal(p.positions.find((x) => x.ticker === "B" && x.side === "YES").thin, true); // 10¢ spread
+  assert.equal(p.positions.find((x) => x.ticker === "A").thin, false);
+});
+
+test("flattenMarkets exposes YES/NO position mints", () => {
+  const rows = flattenMarkets(
+    [{ ticker: "E", title: "E", markets: [{ ticker: "M", status: "active", yesBid: "0.4", yesAsk: "0.5", accounts: { CASH: { yesMint: "Y1", noMint: "N1" } } }] }],
+    NOW,
+  );
+  assert.deepEqual(rows[0].yesMints, ["Y1"]);
+  assert.deepEqual(rows[0].noMints, ["N1"]);
+});

@@ -38,7 +38,8 @@ const state = {
   chip: "all",
   query: "",
   selected: -1,
-  sheet: null, // {type: "market"|"unlock"|"settings", ticker?}
+  sheet: null, // {type: "market"|"unlock"|"settings"|"share", ...}
+  portfolio: { loading: false, data: null, error: null },
 };
 
 // ---------- tiny DOM helpers ----------
@@ -455,6 +456,110 @@ function renderWatch(view) {
   }
 }
 
+// ---------- portfolio ----------
+
+const usd = (n) => `$${(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+function portfolioWallet() {
+  return state.unlock?.wallet || prefs.portfolioWallet || "";
+}
+
+async function loadPortfolio(wallet = portfolioWallet()) {
+  if (!wallet) return;
+  state.portfolio = { ...state.portfolio, loading: true, error: null };
+  if (state.tab === "portfolio") renderView();
+  const res = await send({ type: "portfolio", wallet });
+  state.portfolio = res.ok ? { loading: false, data: res, error: null } : { loading: false, data: state.portfolio.data, error: res.reason };
+  if (state.tab === "portfolio") renderView();
+}
+
+function renderPortfolio(view) {
+  if (!state.unlocked) {
+    view.append(gate("Portfolio", "See every World position you hold, what it would sell for right now, and which ones are hard to exit."));
+    return;
+  }
+  const p = state.portfolio;
+  const wallet = portfolioWallet();
+  if (!wallet) {
+    const input = h("input", { type: "text", id: "pf-wallet", placeholder: "Solana wallet address", spellcheck: "false", style: "flex:1;min-width:0" });
+    view.append(
+      emptyState("radar", "Which wallet?", "Enter the wallet you trade with on World."),
+      h(
+        "form",
+        {
+          class: "pf-form",
+          onsubmit: (e) => {
+            e.preventDefault();
+            prefs.portfolioWallet = input.value.trim();
+            savePrefs();
+            loadPortfolio();
+          },
+        },
+        input,
+        h("button", { class: "btn primary", type: "submit" }, "Load"),
+      ),
+    );
+    return;
+  }
+  if (!p.data && !p.error && !p.loading) {
+    loadPortfolio();
+    view.append(...skeleton(4));
+    return;
+  }
+  const d = p.data;
+  view.append(
+    h(
+      "div",
+      { class: "section-label" },
+      h("span", { class: "case", title: wallet }, `${wallet.slice(0, 4)}…${wallet.slice(-4)}`),
+      h("button", { class: "linkish", onclick: () => loadPortfolio(), disabled: p.loading }, p.loading ? "Updating…" : d ? `Updated ${ago(d.at)} · refresh` : "Refresh"),
+    ),
+  );
+  if (p.error) view.append(h("div", { class: "pf-error" }, p.error));
+  if (!d) {
+    if (p.loading) view.append(...skeleton(4));
+    return;
+  }
+  const tile = (label, value, sub, cls = "") => h("div", { class: "kpi" }, h("div", { class: "kpi-label" }, label), h("div", { class: `kpi-value ${cls}` }, value), h("div", { class: "kpi-sub" }, sub));
+  view.append(
+    h(
+      "div",
+      { class: "kpis pf-kpis" },
+      tile("Exit value", usd(d.exitValue), "sell now at bid"),
+      tile("If all win", usd(d.maxPayout), "$1 per share"),
+      tile("Positions", String(d.positions.length), d.thinCount ? h("span", { class: "warn" }, `${d.thinCount} hard to exit`) : "all liquid"),
+    ),
+  );
+  if (!d.positions.length) {
+    view.append(emptyState("radar", "No open World positions", d.tokens ? `This wallet holds ${d.tokens} tokens, none in live World markets.` : "Positions show up here after you trade on World."));
+    return;
+  }
+  for (const pos of d.positions) {
+    const meta = [pos.eventTitle !== pos.title ? pos.eventTitle : null, `${pos.qty.toLocaleString("en-US", { maximumFractionDigits: 2 })} shares`, pos.hoursToClose !== null ? `closes ${closesIn(pos.hoursToClose)}` : null]
+      .filter(Boolean)
+      .join(" · ");
+    view.append(
+      h(
+        "button",
+        { class: "mrow pf-row", onclick: () => openSheet({ type: "market", ticker: pos.ticker }) },
+        h(
+          "div",
+          { class: "m-main" },
+          h("div", { class: "m-title" }, h("span", { class: `side-pill ${pos.side === "YES" ? "yes" : "no"}` }, pos.side), pos.title),
+          h("div", { class: "m-meta" }, meta),
+        ),
+        h(
+          "div",
+          { class: "m-price" },
+          h("div", { class: "m-yes" }, usd(pos.exitValue)),
+          h("div", { class: "m-book" }, `bid ${cents(pos.bid)}`, pos.thin ? h("span", { class: "sp-wide" }, " · thin") : null),
+        ),
+      ),
+    );
+  }
+  if (d.thinCount) view.append(h("p", { class: "signal-help" }, "“Thin” means no buyer right now or a spread of 6¢+. Selling early may cost more than the quote suggests."));
+}
+
 function emptyState(ic, title, text) {
   return h("div", { class: "empty" }, icon(ic), h("b", {}, title), h("span", {}, text));
 }
@@ -475,6 +580,7 @@ function renderView() {
   if (state.tab === "markets") renderMarkets(view);
   if (state.tab === "signals") renderSignals(view);
   if (state.tab === "watch") renderWatch(view);
+  if (state.tab === "portfolio") renderPortfolio(view);
   view.append(h("div", { class: "foot" }, "Not affiliated with World · Not financial advice · Links include our invite code"));
   $("#view").replaceWith(Object.assign(view, { id: "view" }));
 }
@@ -889,6 +995,25 @@ function settingsSheet() {
             { id: "set-refresh", onchange: (e) => save({ refreshMinutes: Number(e.target.value) }) },
             ...[1, 2, 5, 10].map((m) => h("option", { value: m, selected: s.refreshMinutes === m }, `${m} min`)),
           ),
+        ),
+        row(
+          "Solana RPC",
+          "Used to read your positions",
+          h("input", {
+            type: "text",
+            id: "set-rpc",
+            value: s.rpcUrl,
+            spellcheck: "false",
+            style: "width:170px;font-family:var(--mono);font-size:11px",
+            onchange: (e) => {
+              const v = e.target.value.trim();
+              if (/^https:\/\/\S+$/.test(v)) save({ rpcUrl: v });
+              else {
+                e.target.value = s.rpcUrl;
+                toast("Enter an https:// RPC URL");
+              }
+            },
+          }),
         ),
         row(
           "World connection",

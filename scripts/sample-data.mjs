@@ -25,6 +25,7 @@ function mkt(ticker, sub, yesBid, yesAsk, closeInH, volume, oi, now) {
     volume,
     openInterest: oi,
     closeTime: Math.floor((now + closeInH * H) / 1000),
+    accounts: { CASHx9KJUStyftLFWGvEVf59SGeG9sh5FfcnZMVPCASH: { marketLedger: `${ticker}-L`, yesMint: `${ticker}-YES`, noMint: `${ticker}-NO`, isInitialized: true } },
   };
 }
 
@@ -113,6 +114,23 @@ export function sampleState(now = Date.now()) {
       { id: "a2", ticker: "WXETH-4500", eventTicker: "WXETH-OCT01-4500", title: "Ethereum above $4,500 on Oct 1?", side: "YES", op: "above", price: 0.55 },
     ],
   };
+}
+
+// Token balances for a sample wallet, in the shape of getTokenAccountsByOwner (jsonParsed).
+export const SAMPLE_HOLDINGS = [
+  ["WXNFL-KC-YES", 250],
+  ["WXBTC-110K-YES", 1200],
+  ["WXFED-CUT-NO", 400],
+  ["WXUFC-TOP-YES", 150],
+  ["WXEPL-ARS-YES", 80],
+];
+
+export function sampleRpcReply(ids = [1, 2]) {
+  const accounts = SAMPLE_HOLDINGS.map(([mint, amount]) => ({
+    pubkey: `${mint}-ACC`,
+    account: { data: { parsed: { info: { mint, tokenAmount: { uiAmount: amount, uiAmountString: String(amount), decimals: 6 } } } } },
+  }));
+  return ids.map((id, i) => ({ jsonrpc: "2.0", id, result: { value: i === 0 ? accounts : [] } }));
 }
 
 export { snapshotMids };

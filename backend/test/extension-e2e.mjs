@@ -27,7 +27,7 @@ const upstream = createServer((req, res) => {
   }
   if (/^\/users\/[^/]+\/referral$/.test(url.pathname)) {
     if (req.headers.authorization !== "Bearer world-session") return send(401, {});
-    return send(200, { code: "ABCDEFGH", referredCount: 0, referredBy: "REFCODE1" });
+    return send(200, { code: "ABCDEFGH", referredCount: 0, referredBy: "AB12CD34" });
   }
   send(404, {});
 }).listen(UP);
@@ -36,7 +36,7 @@ const upstream = createServer((req, res) => {
 const ext = mkdtempSync(join(tmpdir(), "wt-ext-"));
 for (const p of ["manifest.json", "src", "icons"]) cpSync(join(root, p), join(ext, p), { recursive: true });
 const cfgPath = join(ext, "src/config.js");
-writeFileSync(cfgPath, readFileSync(cfgPath, "utf8").replace('BACKEND_URL: ""', `BACKEND_URL: "${BASE}"`).replace('REFERRAL_CODE: ""', 'REFERRAL_CODE: "REFCODE1"'));
+writeFileSync(cfgPath, readFileSync(cfgPath, "utf8").replace('BACKEND_URL: ""', `BACKEND_URL: "${BASE}"`).replace('REFERRAL_CODE: ""', 'REFERRAL_CODE: "AB12CD34"'));
 const manifest = JSON.parse(readFileSync(join(ext, "manifest.json"), "utf8"));
 manifest.host_permissions.push(`${BASE}/*`);
 manifest.externally_connectable = { matches: [`${BASE}/*`] };
@@ -55,7 +55,7 @@ const extId = sw.url().split("/")[2];
 
 writeFileSync(
   ".dev.vars",
-  [`SESSION_SECRET=e2e-secret-0123456789abcdef`, `UPSTREAM_URL=http://127.0.0.1:${UP}`, `USERS_API_URL=http://127.0.0.1:${UP}`, `REFERRAL_CODE=REFCODE1`, `EXTENSION_IDS=${extId}`].join("\n"),
+  [`SESSION_SECRET=e2e-secret-0123456789abcdef`, `UPSTREAM_URL=http://127.0.0.1:${UP}`, `USERS_API_URL=http://127.0.0.1:${UP}`, `REFERRAL_CODE=AB12CD34`, `EXTENSION_IDS=${extId}`].join("\n"),
 );
 rmSync(".wrangler/state", { recursive: true, force: true });
 execSync("npx wrangler d1 migrations apply world-terminal --local", { stdio: "ignore" });

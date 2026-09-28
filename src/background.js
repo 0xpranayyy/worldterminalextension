@@ -1,4 +1,4 @@
-import { CONFIG, DEFAULT_SETTINGS, normalizeCode, eventUrl, inviteUrl } from "./config.js";
+import { CONFIG, DEFAULT_SETTINGS, DEV_BUILD, normalizeCode, eventUrl, inviteUrl } from "./config.js";
 import { AuthRequiredError, fetchActiveEvents, fetchReferralStatus } from "./lib/api.js";
 import { fetchBalances, matchPositions } from "./lib/portfolio.js";
 import {
@@ -68,21 +68,35 @@ async function getToken() {
 }
 
 async function isUnlocked() {
+  if (DEV_BUILD) return true;
   const { unlock } = await store.get("unlock");
   return !!unlock?.ok;
 }
 
 // ---------- Polling ----------
 
+// One refresh at a time. A request that arrives mid-run (e.g. a fresh World token) queues exactly
+// one more run instead of being folded into the one that started without it.
 let inflight = null;
+let queued = null;
 function refresh() {
-  inflight ??= doRefresh().finally(() => (inflight = null));
-  return inflight;
+  if (!inflight) {
+    inflight = doRefresh().finally(() => (inflight = null));
+    return inflight;
+  }
+  queued ??= inflight.then(() => {
+    queued = null;
+    return refresh();
+  });
+  return queued;
 }
 
 async function doRefresh() {
   if (CONFIG.BACKEND_URL) {
-    const served = await refreshFromBackend().catch(() => false);
+    const served = await refreshFromBackend().catch(async (err) => {
+      await store.set({ lastError: { message: `Backend: ${err.message}`, at: Date.now(), transport: "backend" } });
+      return false;
+    });
     if (served) return;
   }
   return refreshDirect();
@@ -124,6 +138,46 @@ function applyThresholds(o, s) {
   };
 }
 
+// ---------- Relay through a world.xyz tab ----------
+// If World's API rejects requests that don't come from world.xyz, the same request made by the
+// content script carries world.xyz's origin. We switch to that transport after a rejection while
+// the token is still valid, and remember it for this service-worker lifetime.
+let transport = "direct";
+
+async function relayFetch(url, init = {}) {
+  const tabs = await chrome.tabs.query({ url: "https://world.xyz/*" });
+  if (!tabs.length) {
+    const err = new AuthRequiredError("Keep a world.xyz tab open. World only answers requests made from its own site.");
+    err.keepToken = true; // the session is fine; we just have no tab to send it through
+    throw err;
+  }
+  let lastErr;
+  for (const tab of tabs) {
+    try {
+      const res = await chrome.tabs.sendMessage(tab.id, { type: "relayFetch", url, headers: init.headers || {} });
+      if (res && typeof res.status === "number") return new Response(res.body, { status: res.status, headers: { "Content-Type": "application/json" } });
+    } catch (err) {
+      lastErr = err; // tab still loading or content script not injected yet
+    }
+  }
+  throw new Error(`Couldn't reach the world.xyz tab (${lastErr?.message || "no response"}). Reload world.xyz.`);
+}
+
+// Runs an API call directly, falling back to the world.xyz tab when a valid token is rejected.
+async function withTransport(call) {
+  if (transport === "relay") return call(relayFetch);
+  try {
+    return await call(fetch);
+  } catch (err) {
+    // Rejected with a valid token, or blocked at the network level ("Failed to fetch").
+    const retry = err instanceof AuthRequiredError || err instanceof TypeError;
+    if (!retry || !(await getToken())) throw err;
+    const result = await call(relayFetch);
+    transport = "relay";
+    return result;
+  }
+}
+
 async function refreshDirect() {
   const token = await getToken();
   if (!token) {
@@ -133,7 +187,7 @@ async function refreshDirect() {
   const started = Date.now();
   try {
     const settings = await getSettings();
-    const events = await fetchActiveEvents(token);
+    const events = await withTransport((f) => fetchActiveEvents(token, undefined, f));
     const now = Date.now();
     const rows = flattenMarkets(events, now);
     const { snapshots = [] } = await store.get("snapshots");
@@ -156,14 +210,15 @@ async function refreshDirect() {
       events: events.length,
       markets: rows.length,
       total: rows.length,
-      source: "direct",
+      source: transport === "relay" ? "relay" : "direct",
       medianSpread: median(rows.map((r) => r.spread)),
       tightMarkets: rows.filter((r) => r.spread !== null && r.spread <= 0.03).length,
     });
   } catch (err) {
     const auth = err instanceof AuthRequiredError;
-    if (auth) await chrome.storage.local.remove("auth");
-    await store.set({ status: { state: auth ? "auth" : "error", message: err.message, at: Date.now() } });
+    if (auth && !err.keepToken) await chrome.storage.local.remove("auth");
+    const at = Date.now();
+    await store.set({ status: { state: auth ? "auth" : "error", message: err.message, at }, lastError: { message: err.message, at, transport } });
   }
 }
 
@@ -174,6 +229,8 @@ async function commit(rows, opportunities, status) {
   const { snapshots = [], alerts = [] } = await store.get(["snapshots", "alerts"]);
   const kept = snapshots.filter((s) => now - s.t <= SNAPSHOT_KEEP_MS);
   if (!kept.length || now - kept[kept.length - 1].t >= SNAPSHOT_EVERY_MS) kept.push({ t: now, mids: snapshotMids(rows) });
+  // History is megabytes; only rewrite it when a snapshot was added or pruned.
+  const historyChanged = kept.length !== snapshots.length || kept[kept.length - 1] !== snapshots[snapshots.length - 1];
 
   const fired = evaluateAlerts(alerts, rows);
   if (fired.length) {
@@ -182,7 +239,7 @@ async function commit(rows, opportunities, status) {
     if (settings.notifyAlerts) for (const f of fired) notifyAlert(f);
   }
   if ((await isUnlocked()) && settings.notifySignals) await notifyNewSignals(opportunities);
-  await store.set({ rows, opportunities, snapshots: kept, status });
+  await store.set({ rows, opportunities, status, ...(historyChanged ? { snapshots: kept } : {}) });
 }
 
 // ---------- Notifications & badge ----------
@@ -231,7 +288,7 @@ async function updateBadge() {
   }
   const arbs = (opportunities?.underround?.length || 0) + (opportunities?.complement?.length || 0);
   await chrome.action.setBadgeBackgroundColor({ color: "#3DD68C" });
-  await chrome.action.setBadgeText({ text: unlock?.ok && arbs ? String(Math.min(arbs, 99)) : "" });
+  await chrome.action.setBadgeText({ text: (unlock?.ok || DEV_BUILD) && arbs ? String(Math.min(arbs, 99)) : "" });
 }
 
 // ---------- Invite unlock ----------
@@ -251,7 +308,7 @@ async function verifyWallet(wallet) {
   const token = await getToken();
   if (!token) return { ok: false, reason: new AuthRequiredError().message, auth: true };
   try {
-    const status = await fetchReferralStatus(wallet, token);
+    const status = await withTransport((f) => fetchReferralStatus(wallet, token, undefined, f));
     const ok = matchesReferrer(status.referredBy);
     await store.set({ unlock: { wallet, ok, referredBy: status.referredBy ?? null, verifiedAt: Date.now() } });
     if (ok) return { ok: true };
@@ -294,6 +351,10 @@ const handlers = {
     return verifyWallet(wallet);
   },
   async unlockState() {
+    if (DEV_BUILD) {
+      const { unlock } = await store.get("unlock");
+      return { unlocked: true, dev: true, unlock: { ...(unlock || {}), wallet: unlock?.wallet || "", ok: true, via: "dev" } };
+    }
     await maybeReverify();
     const { unlock } = await store.get("unlock");
     return { unlocked: !!unlock?.ok, unlock: unlock || null };
@@ -348,6 +409,27 @@ const handlers = {
       await chrome.tabs.create({ url: chrome.runtime.getURL("src/ui/app.html") });
     }
     return { ok: true };
+  },
+  async diagnostics() {
+    const d = await store.get(["status", "auth", "lastError", "rows", "snapshots", "unlock", "session", "settings"]);
+    return {
+      version: chrome.runtime.getManifest().version,
+      build: DEV_BUILD ? "developer" : "release",
+      referralCode: normalizeCode(CONFIG.REFERRAL_CODE) || null,
+      backend: CONFIG.BACKEND_URL || null,
+      transport,
+      status: d.status || null,
+      lastError: d.lastError || null,
+      worldSession: d.auth ? { expiresInMin: Math.round((d.auth.expiry - Date.now()) / 60000) } : null,
+      markets: d.rows?.length || 0,
+      sampleMarket: d.rows?.[0] ? { ticker: d.rows[0].ticker, yesBid: d.rows[0].yesBid, yesAsk: d.rows[0].yesAsk, mints: (d.rows[0].yesMints || []).length } : null,
+      snapshots: d.snapshots?.length || 0,
+      unlock: d.unlock ? { ok: !!d.unlock.ok, via: d.unlock.via || "direct" } : null,
+      backendSession: d.session ? { expiresAt: new Date(d.session.exp * 1000).toISOString() } : null,
+      settings: d.settings || {},
+      userAgent: navigator.userAgent,
+      at: new Date().toISOString(),
+    };
   },
   async links() {
     return { invite: inviteUrl("/") };

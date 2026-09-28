@@ -18,6 +18,19 @@
     }
   }
 
+  // ---------- Request relay ----------
+  // The extension asks us to make World API calls when World only accepts them from world.xyz.
+  const RELAY_ALLOWED = ["https://markets-api-proxy.world-xyz.workers.dev/api/v1/", "https://users-api.world.xyz/api/v1/"];
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    if (msg?.type !== "relayFetch" || !RELAY_ALLOWED.some((p) => String(msg.url).startsWith(p))) return false;
+    const headers = {};
+    if (typeof msg.headers?.Authorization === "string") headers.Authorization = msg.headers.Authorization;
+    fetch(msg.url, { headers, credentials: "omit", signal: AbortSignal.timeout(15000) })
+      .then(async (res) => sendResponse({ status: res.status, body: await res.text() }))
+      .catch((err) => sendResponse({ status: 0, body: "", error: err.message }));
+    return true;
+  });
+
   // ---------- Event page overlay ----------
 
   let panel = null;

@@ -74,6 +74,10 @@ a { color: var(--accent-2); }
   display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px;
   font: 700 10px/1 var(--font); letter-spacing: 0.08em; background: var(--gold); color: #1d1606;
 }
+.dev-chip {
+  display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px;
+  font: 700 10px/1 var(--font); letter-spacing: 0.08em; background: var(--accent-soft); color: var(--accent-2); border: 1px solid rgba(124, 156, 255, 0.35);
+}
 .free-chip {
   display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px;
   font: 600 10px/1 var(--font); letter-spacing: 0.08em; border: 1px solid var(--line-2); color: var(--text-2);

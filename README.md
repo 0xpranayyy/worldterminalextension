@@ -54,9 +54,11 @@ Other commands:
 
 ```
 npm test              # unit tests for the analytics engine
+npm run test:relay    # extension falls back to the world.xyz tab when World rejects direct calls
 npm run screenshots   # load the extension with sample data, capture every screen + store images
 npm run icons         # regenerate icons/
-npm run package       # build world-terminal.zip for the Chrome Web Store
+npm run package       # build world-terminal.zip for the Chrome Web Store (needs REFERRAL_CODE)
+npm run package:dev   # test build without an invite code: Pro unlocked, marked DEV, not for the store
 ```
 
 ## System design

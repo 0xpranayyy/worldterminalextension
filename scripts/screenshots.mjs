@@ -2,7 +2,7 @@
 //   npm run screenshots          → store/screenshots/*.png (1280×800 store images + raw UI shots)
 // Set CHROMIUM_PATH if Playwright's bundled Chromium isn't installed.
 import { chromium } from "playwright";
-import { mkdirSync, readFileSync, existsSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync, cpSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createServer } from "node:http";
@@ -25,13 +25,19 @@ const rpc = createServer((req, res) => {
   });
 }).listen(8899);
 
+// Screens show the release build (free vs Pro), so load a copy with a sample invite code set.
+const ext = mkdtempSync(join(tmpdir(), "wt-shots-ext-"));
+for (const f of ["manifest.json", "src", "icons"]) cpSync(join(root, f), join(ext, f), { recursive: true });
+const cfg = join(ext, "src/config.js");
+writeFileSync(cfg, readFileSync(cfg, "utf8").replace(/REFERRAL_CODE: "[^"]*"/, 'REFERRAL_CODE: "AB12CD34"'));
+
 const profile = join(tmpdir(), `wt-shots-${Date.now()}`);
 const executablePath = process.env.CHROMIUM_PATH || (existsSync("/opt/pw-browsers/chromium-1194/chrome-linux/chrome") ? "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" : undefined);
 const ctx = await chromium.launchPersistentContext(profile, {
   executablePath,
   headless: true,
   deviceScaleFactor: 2,
-  args: [`--disable-extensions-except=${root}`, `--load-extension=${root}`, "--headless=new"],
+  args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`, "--headless=new"],
 });
 
 const errors = [];
@@ -147,6 +153,7 @@ await p.close();
 
 await ctx.close();
 rmSync(profile, { recursive: true, force: true });
+rmSync(ext, { recursive: true, force: true });
 
 // ---- 1280×800 store images (the store requires exactly this size, so render at 1×) ----
 const browser = await chromium.launch({ executablePath, headless: true });

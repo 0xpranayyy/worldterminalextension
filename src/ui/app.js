@@ -1,4 +1,4 @@
-import { CONFIG, DEFAULT_SETTINGS, normalizeCode, inviteUrl, eventUrl, WORLD_ORIGIN } from "../config.js";
+import { CONFIG, DEFAULT_SETTINGS, DEV_BUILD, normalizeCode, inviteUrl, eventUrl, WORLD_ORIGIN } from "../config.js";
 import { SORTS, SCORE_WEIGHTS, scoreParts, historyFor, marketLabel } from "../lib/analytics.js";
 import { drawCard, shareText } from "./share.js";
 
@@ -125,7 +125,9 @@ function renderHeader() {
   $("#btn-panel").replaceChildren(icon("panel"));
   $("#btn-settings").replaceChildren(icon("gear"));
   $("#btn-panel").hidden = !isPopup;
-  $("#plan").replaceChildren(state.unlocked ? h("span", { class: "pro-chip" }, "PRO") : h("span", { class: "free-chip" }, "FREE"));
+  $("#plan").replaceChildren(
+    DEV_BUILD ? h("span", { class: "dev-chip", title: "No invite code set: Pro is unlocked for testing" }, "DEV") : state.unlocked ? h("span", { class: "pro-chip" }, "PRO") : h("span", { class: "free-chip" }, "FREE"),
+  );
 }
 
 function renderLive() {
@@ -158,7 +160,12 @@ function renderBanner() {
       h(
         "div",
         { class: "banner connect" },
-        h("div", { class: "banner-text" }, h("b", {}, "Connect to World"), "Open world.xyz once in a tab. World Terminal picks up your session."),
+        h(
+          "div",
+          { class: "banner-text" },
+          h("b", {}, "Connect to World"),
+          state.status?.message && /tab open/.test(state.status.message) ? state.status.message : "Open world.xyz once in a tab. World Terminal picks up your session.",
+        ),
         h("a", { class: "btn primary", href: WORLD_ORIGIN, target: "_blank", rel: "noopener" }, "Open"),
       ),
     );
@@ -848,10 +855,13 @@ function shareSheet(s) {
 function unlockSheet() {
   const code = normalizeCode(CONFIG.REFERRAL_CODE);
   if (state.unlocked) {
-    const w = state.unlock.wallet;
+    const w = state.unlock?.wallet || "";
+    const line = DEV_BUILD
+      ? "Developer build: no invite code is set, so Pro is unlocked for testing. Add your code in src/config.js before publishing."
+      : `Wallet ${w.slice(0, 4)}…${w.slice(-4)} joined World with our invite.`;
     return [
-      sheetHead("World Terminal Pro", "Active"),
-      h("div", { class: "hero" }, h("div", { class: "hero-badge" }, icon("crown")), h("h2", {}, "You're on Pro"), h("p", {}, `Wallet ${w.slice(0, 4)}…${w.slice(-4)} joined World with our invite.`)),
+      sheetHead("World Terminal Pro", DEV_BUILD ? "Developer build" : "Active"),
+      h("div", { class: "hero" }, h("div", { class: "hero-badge" }, icon("crown")), h("h2", {}, "You're on Pro"), h("p", {}, line)),
       perks(),
     ];
   }
@@ -1048,7 +1058,9 @@ function settingsSheet() {
       h(
         "div",
         { class: "set-group" },
-        state.unlocked
+        DEV_BUILD
+          ? row("Developer build", "No invite code set. Pro is unlocked for testing; store packaging is blocked.", h("span", { class: "dev-chip" }, "DEV"))
+          : state.unlocked
           ? row(
               "Pro · active",
               `${state.unlock.wallet.slice(0, 6)}…${state.unlock.wallet.slice(-4)}`,
@@ -1068,8 +1080,49 @@ function settingsSheet() {
         row("Keyboard", "/ search · ↑↓ move · Enter open · R refresh · Esc close", h("span")),
       ),
     ),
+    diagnosticsSection(),
     h("p", { class: "fineprint" }, "Not affiliated with World. Nothing here is financial advice. Links to world.xyz include our invite code."),
   ];
+}
+
+function diagnosticsSection() {
+  const st = state.status;
+  const source = { direct: "World API", relay: "World API via world.xyz tab", backend: "World Terminal cloud" }[st?.source] || "—";
+  const kv = (k, v, cls = "") => h("div", { class: "diag-row" }, h("span", { class: "faint" }, k), h("span", { class: `num ${cls}` }, v));
+  const box = h(
+    "div",
+    { class: "set-group diag" },
+    kv("State", st?.state || "not started", st?.state === "ok" ? "yes" : "warn"),
+    kv("Data source", source),
+    kv("Last update", st?.at ? ago(st.at) : "never"),
+    kv("Markets", String(state.rows.length)),
+    kv("World session", state.auth ? (state.auth.expiry > Date.now() ? (state.auth.expiry - Date.now() > 90 * 60000 ? `${Math.round((state.auth.expiry - Date.now()) / 3600000)}h left` : `${Math.round((state.auth.expiry - Date.now()) / 60000)} min left`) : "expired") : "not connected", state.auth?.expiry > Date.now() ? "" : "warn"),
+    st?.state && st.state !== "ok" ? kv("Error", st.message || "—", "no") : null,
+  );
+  return h(
+    "div",
+    { class: "sheet-section" },
+    h("div", { class: "label" }, "Diagnostics"),
+    box,
+    h(
+      "button",
+      {
+        class: "btn block",
+        style: "margin-top:8px",
+        onclick: async () => {
+          const info = await send({ type: "diagnostics" });
+          try {
+            await navigator.clipboard.writeText("World Terminal debug info\n" + JSON.stringify(info, null, 2));
+            toast("Debug info copied. Paste it to your developer");
+          } catch {
+            toast("Couldn't copy");
+          }
+        },
+      },
+      "Copy debug info",
+    ),
+    h("p", { class: "fineprint", style: "text-align:left;margin:8px 2px 0" }, "Debug info never includes your World session token or wallet keys."),
+  );
 }
 
 // ---------- events ----------

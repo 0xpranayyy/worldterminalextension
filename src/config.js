@@ -46,6 +46,10 @@ export function normalizeCode(code) {
   return CODE_RE.test(c) ? c : null;
 }
 
+// No invite code yet = developer build: Pro is unlocked so every feature can be tested.
+// `npm run package` refuses to build a store zip in this state.
+export const DEV_BUILD = !normalizeCode(CONFIG.REFERRAL_CODE);
+
 export function inviteUrl(path = "/") {
   const code = normalizeCode(CONFIG.REFERRAL_CODE);
   const url = new URL(path, WORLD_ORIGIN);

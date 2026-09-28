@@ -6,9 +6,11 @@
   "description": "Chrome extension for world.xyz: liquidity scanner, opportunities, alerts.",
   "scripts": {
     "test": "node --test test/*.test.mjs",
+    "test:relay": "node test/relay-e2e.mjs",
     "icons": "node scripts/make-icons.mjs",
     "screenshots": "node scripts/screenshots.mjs",
-    "package": "rm -f world-terminal.zip && zip -r world-terminal.zip manifest.json src icons -x '*.DS_Store'"
+    "package": "node scripts/package.mjs",
+    "package:dev": "node scripts/package.mjs --dev"
   },
   "devDependencies": {
     "playwright": "^1.56.1"

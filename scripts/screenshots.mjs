@@ -205,7 +205,7 @@ if (process.env.DEBUG_SHOTS) console.log("overlay: start");
 p = await ctx.newPage();
 p.on("pageerror", (e) => errors.push(`overlay: ${e.message}`));
 await p.setViewportSize({ width: 1280, height: 800 });
-await p.route("https://world.xyz/**", (route) =>
+const worldStub = (route) =>
   route.fulfill({
     contentType: "text/html",
     body: `<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;background:#f4f4f2;font:16px system-ui;color:#111">
@@ -213,8 +213,8 @@ await p.route("https://world.xyz/**", (route) =>
       <h1 style="font-size:40px;margin:8px 0 24px">Premier League 2026–27 winner</h1>
       ${[["Arsenal", "34%"], ["Liverpool", "28%"], ["Manchester City", "21%"], ["Chelsea", "9%"], ["Any other club", "6%"]].map(([n, v]) => `<div style="display:flex;justify-content:space-between;padding:18px 0;border-top:1px solid #ddd"><b>${n}</b><span>${v}</span></div>`).join("")}
       <p style="color:#888;font-size:12px;margin-top:24px">Stub page for screenshots</p></div></body></html>`,
-  }),
-);
+  });
+await p.route("https://world.xyz/**", worldStub);
 await p.goto("https://world.xyz/event/WXEPL-2627-WIN");
 await p.waitForSelector("world-terminal-panel", { timeout: 5000 });
 await p.waitForTimeout(900);
@@ -238,6 +238,27 @@ if (process.env.DEBUG_SHOTS) console.log("overlay: pro shot");
   await ctl.close();
 }
 await p.close();
+
+// ---- Side panel following a world.xyz event tab ----
+{
+  const side = await page("app.html", { width: 420, height: 860 });
+  await seed(side, { pro: true });
+  const world = await ctx.newPage();
+  await world.route("https://world.xyz/**", worldStub);
+  await world.goto("https://world.xyz/event/WXEPL-2627-WIN");
+  await world.bringToFront();
+  await side.waitForSelector(".ctx", { timeout: 5000 });
+  await side.waitForTimeout(700);
+  await shot(side, "sidepanel");
+  await side.setViewportSize({ width: 640, height: 860 });
+  await side.waitForTimeout(500);
+  await shot(side, "sidepanel-wide");
+  await side.click(".orow >> nth=0");
+  await side.waitForTimeout(600);
+  await shot(side, "sidepanel-drawer");
+  await world.close();
+  await side.close();
+}
 
 // ---- 1280×800 store images (the store requires exactly this size, so render at 1×) ----
 const browser = await chromium.launch({ executablePath, headless: true });

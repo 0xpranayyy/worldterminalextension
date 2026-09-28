@@ -12,6 +12,9 @@ const isPopup = chrome.extension.getViews({ type: "popup" }).includes(window);
 // Embedded as the live preview inside the onboarding page.
 const isEmbedded = window.top !== window;
 if (!isPopup) document.body.classList.add("panel");
+// Chrome's side panel (or the full-tab fallback): sits next to world.xyz, so it follows that tab.
+const isSidePanel = !isPopup && !isEmbedded;
+if (isSidePanel) document.body.classList.add("side");
 
 const prefs = (() => {
   try {
@@ -48,6 +51,8 @@ const state = {
   moves: {}, // ticker -> mid change vs ~1h ago
   flash: new Map(), // ticker -> "up" | "down" for rows whose price just changed
   prevMids: null,
+  ctx: null, // side panel: {tabId, eventTicker, live} for the world.xyz tab it follows
+  ctxAll: false,
 };
 
 // ---------- tiny DOM helpers ----------
@@ -66,6 +71,7 @@ function h(tag, attrs = {}, ...children) {
 }
 
 const ICONS = {
+  chevron: '<path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   refresh: '<path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   panel: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14.5 4.5v15" stroke="currentColor" stroke-width="1.8"/>',
   gear: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="15" cy="7" r="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="17" r="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/>',
@@ -242,6 +248,204 @@ function renderBanner() {
   b.replaceChildren();
 }
 
+// ---------- side panel: ticker tape + the world.xyz tab it follows ----------
+
+function eventFromUrl(url) {
+  try {
+    const u = new URL(url);
+    if (u.origin !== WORLD_ORIGIN) return null;
+    const m = u.pathname.match(/^\/event\/([^/?#]+)/);
+    return { eventTicker: m ? decodeURIComponent(m[1]) : null };
+  } catch {
+    return null;
+  }
+}
+
+// The active tab if it's world.xyz, otherwise the world.xyz event tab used most recently.
+// Tab URLs are only visible for world.xyz (host permission), which is all we need.
+async function trackTab() {
+  if (!isSidePanel) return;
+  let ctx = null;
+  try {
+    const win = await chrome.windows.getCurrent();
+    const [active] = await chrome.tabs.query({ active: true, windowId: win.id });
+    const hit = active?.url && eventFromUrl(active.url);
+    if (hit) ctx = { tabId: active.id, eventTicker: hit.eventTicker, live: true };
+    else {
+      const recent = (await chrome.tabs.query({ url: "https://world.xyz/event/*" })).sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0];
+      const ev = recent && eventFromUrl(recent.url);
+      if (ev?.eventTicker) ctx = { tabId: recent.id, eventTicker: ev.eventTicker, live: false };
+    }
+  } catch {
+    ctx = null;
+  }
+  const changed = JSON.stringify(ctx) !== JSON.stringify(state.ctx);
+  if (changed && ctx?.eventTicker !== state.ctx?.eventTicker) state.ctxAll = false;
+  state.ctx = ctx;
+  if (changed) renderContext();
+}
+
+function eventArb(eventTicker, rows) {
+  const o = state.opportunities;
+  if (!o) return null;
+  const u = o.underround?.find((x) => x.eventTicker === eventTicker);
+  if (u) return { edge: u.edge, returnPct: u.returnPct, label: "outcome set" };
+  const tickers = new Set(rows.map((r) => r.ticker));
+  const c = o.complement?.find((x) => tickers.has(x.ticker));
+  return c ? { edge: c.edge, returnPct: c.returnPct, label: "YES+NO" } : null;
+}
+
+function ctxRow(r) {
+  const price = r.yesAsk ?? r.mid;
+  const pct = Math.round((price ?? 0) * 100);
+  return h(
+    "button",
+    { class: "orow", title: marketLabel(r), onclick: () => openSheet({ type: "market", ticker: r.ticker }) },
+    h("span", { class: "o-fill", style: `width:${pct}%` }),
+    h("span", { class: "o-name" }, state.watchlist.includes(r.ticker) ? h("span", { class: "star" }, "★") : null, r.title),
+    changePill(r.ticker),
+    h("span", { class: "o-price num" }, cents(price)),
+  );
+}
+
+function renderContext() {
+  const box = $("#context");
+  const c = state.ctx;
+  if (!isSidePanel || !c) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  const hint = (title, text) => box.replaceChildren(h("div", { class: "ctx-hint" }, icon("globe"), h("span", {}, h("b", {}, title), text)));
+  if (!c.eventTicker) return hint("world.xyz is open", "Open any event and its outcomes show up here.");
+  const rows = state.rows.filter((r) => r.eventTicker === c.eventTicker).sort((a, b) => (b.yesAsk ?? b.mid ?? 0) - (a.yesAsk ?? a.mid ?? 0));
+  if (!rows.length) return hint(state.rows.length ? "Event not in the live feed" : "Waiting for market data", state.rows.length ? "It may be closed or not listed yet." : "Outcomes appear once World Terminal connects.");
+
+  const first = rows[0];
+  const arb = eventArb(c.eventTicker, rows);
+  const collapsed = !!prefs.ctxCollapsed;
+  const avgLiq = Math.round(rows.reduce((s, r) => s + r.score, 0) / rows.length);
+  const vol = rows.reduce((s, r) => s + (r.volume || 0), 0);
+  const hours = rows.map((r) => r.hoursToClose).filter((x) => x !== null && x !== undefined);
+  const toggle = () => {
+    prefs.ctxCollapsed = !collapsed;
+    savePrefs();
+    renderContext();
+  };
+
+  const head = h(
+    "button",
+    { class: "ctx-head", "aria-expanded": String(!collapsed), onclick: toggle },
+    avatar(first),
+    h(
+      "div",
+      { class: "ctx-main" },
+      h("div", { class: "ctx-eyebrow" }, h("span", { class: `dot${c.live ? "" : " off"}` }), c.live ? "On this page" : "Last viewed on world.xyz"),
+      h("div", { class: "ctx-title" }, first.eventTitle || first.title),
+    ),
+    arb ? h("span", { class: "ctx-arb" }, icon("bolt"), `+${cents1(arb.edge)}`) : null,
+    h("span", { class: "ctx-chev" }, icon("chevron")),
+  );
+  const card = h("section", { class: `ctx${collapsed ? " collapsed" : ""}${arb ? " hot" : ""}` }, head);
+
+  if (!collapsed) {
+    const stat = (k, v, cls = "") => h("div", {}, h("span", {}, k), h("b", { class: `num ${cls}` }, v));
+    card.append(
+      h(
+        "div",
+        { class: "ctx-stats" },
+        stat("Outcomes", String(rows.length)),
+        stat("Liquidity", String(avgLiq), avgLiq >= 65 ? "yes" : avgLiq < 35 ? "no" : ""),
+        stat("Volume", compact(vol)),
+        stat("Closes", hours.length ? closesIn(Math.min(...hours)).replace(/^in /, "") : "–"),
+      ),
+    );
+    if (arb) {
+      card.append(
+        h("div", { class: "ctx-callout" }, icon("bolt"), h("span", { title: `Arbitrage on the ${arb.label}` }, h("b", {}, `+${cents1(arb.edge)} per $1`), ` · ${arb.returnPct}% return`), h("button", { class: "linkish", onclick: () => setTab("signals") }, "Details")),
+      );
+    }
+    const limit = state.unlocked ? (state.ctxAll ? rows.length : 5) : 2;
+    const list = h("div", { class: "ctx-list" }, ...rows.slice(0, limit).map(ctxRow));
+    card.append(list);
+    const foot = h("div", { class: "ctx-foot" });
+    if (!state.unlocked && rows.length > limit) {
+      foot.append(h("button", { class: "btn gold sm", onclick: () => openSheet({ type: "unlock" }) }, icon("crown"), `Unlock all ${rows.length} outcomes`));
+    } else if (rows.length > 5) {
+      foot.append(
+        h(
+          "button",
+          {
+            class: "linkish",
+            onclick: () => {
+              state.ctxAll = !state.ctxAll;
+              renderContext();
+            },
+          },
+          state.ctxAll ? "Show fewer" : `Show all ${rows.length}`,
+        ),
+      );
+    }
+    if (!c.live) foot.append(h("button", { class: "linkish", onclick: () => chrome.tabs.update(c.tabId, { active: true }).catch(() => {}) }, "Go to tab"));
+    if (foot.childNodes.length) card.append(foot);
+  }
+  box.replaceChildren(card);
+}
+
+function renderTape() {
+  const el = $("#tape");
+  if (!isSidePanel) return;
+  const byTicker = new Map(state.rows.map((r) => [r.ticker, r]));
+  const items = Object.entries(state.moves)
+    .filter(([t, d]) => Math.abs(d) >= 0.01 && byTicker.has(t))
+    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+    .slice(0, 12)
+    .map(([t, d]) => [byTicker.get(t), d]);
+  if (items.length < 3) {
+    el.hidden = true;
+    return;
+  }
+  // Rebuilding restarts the scroll animation, so only rebuild when the content changes.
+  const key = items.map(([r, d]) => `${r.ticker}:${Math.round(d * 100)}:${cents(r.yesAsk ?? r.mid)}`).join();
+  if (el.dataset.key === key && !el.hidden) return;
+  el.dataset.key = key;
+  const item = ([r, d], copy) =>
+    h(
+      "button",
+      { class: "tk", title: marketLabel(r), tabindex: copy ? "-1" : null, "aria-hidden": copy ? "true" : null, onclick: () => openSheet({ type: "market", ticker: r.ticker }) },
+      avatar(r, "xs"),
+      h("span", { class: "tk-t" }, r.title),
+      h("span", { class: "num tk-p" }, cents(r.yesAsk ?? r.mid)),
+      h("span", { class: `num ${d > 0 ? "yes" : "no"}` }, `${d > 0 ? "▲" : "▼"}${Math.abs(Math.round(d * 100))}¢`),
+    );
+  el.replaceChildren(
+    h("span", { class: "tape-label" }, icon("trend"), "1h"),
+    h("div", { class: "tape-track" }, h("div", { class: "tape-run", style: `--dur:${items.length * 5}s` }, ...items.map((x) => item(x, false)), ...items.map((x) => item(x, true)))),
+  );
+  el.hidden = false;
+}
+
+if (isSidePanel) {
+  let t;
+  const again = () => {
+    clearTimeout(t);
+    t = setTimeout(trackTab, 120);
+  };
+  chrome.tabs.onActivated.addListener(again);
+  chrome.tabs.onUpdated.addListener((_id, info) => (info.url || info.status === "complete") && again());
+  chrome.tabs.onRemoved.addListener(again);
+  chrome.windows.onFocusChanged.addListener(again);
+  trackTab();
+
+  // Links to world.xyz drive the tab next to the panel instead of piling up new tabs.
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest?.('a[href^="https://world.xyz"]');
+    if (!a || !state.ctx?.live || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault();
+    chrome.tabs.update(state.ctx.tabId, { url: a.href }).catch(() => chrome.tabs.create({ url: a.href }));
+  });
+}
+
 // ---------- tabs ----------
 
 function renderTabs() {
@@ -364,6 +568,14 @@ function marketRow(r, i) {
       h("div", { class: "prob", title: `${Math.round((price ?? 0) * 100)}% implied` }, h("span", { style: `width:${Math.round((price ?? 0) * 100)}%` })),
       h("div", { class: "m-book" }, `${cents(r.yesBid)}–${cents(r.yesAsk)} · `, h("span", { class: spreadClass }, cents(r.spread))),
     ),
+    // Extra columns, shown only when the side panel is wide enough.
+    h(
+      "div",
+      { class: "m-ext" },
+      h("span", { class: spreadClass }, cents1(r.spread)),
+      h("span", {}, compact(r.volume)),
+      h("span", {}, r.hoursToClose !== null ? closesIn(r.hoursToClose).replace(/^in /, "") : "–"),
+    ),
     ring(r.score),
   );
 }
@@ -391,6 +603,7 @@ function renderMarkets(view) {
   const hidden = Math.max(total, state.status?.total || 0) - rows.length;
   view.append(
     h("div", { class: "section-label" }, h("span", {}, `${compact(Math.max(total, state.status?.total || 0))} markets`), h("span", {}, $("#sort").selectedOptions[0]?.textContent || "")),
+    h("div", { class: "mhead", "aria-hidden": "true" }, h("span", {}, "Market"), h("span", {}, "YES"), h("span", { class: "m-ext" }, h("span", {}, "Spread"), h("span", {}, "Volume"), h("span", {}, "Closes")), h("span", {}, "Liq")),
     ...rows.map(marketRow),
   );
   if (!state.unlocked && hidden > 0 && !state.query && state.chip === "all") {
@@ -1560,6 +1773,8 @@ function renderAll() {
   renderLive();
   renderKpis();
   renderBanner();
+  renderTape();
+  renderContext();
   renderTabs();
   renderChips();
   renderSignalChips();

@@ -473,3 +473,6 @@ body.panel { width: auto; height: 100vh; }
 .pc-swatch { position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 0 3px 3px 0; }
 .pcard .m-title { gap: 6px; }
 .prob.wide { width: 100%; margin-top: 6px; }
+
+.share-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 11px; }
+.share-preview.square { width: 78%; margin: 0 auto; }

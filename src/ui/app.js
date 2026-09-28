@@ -1,6 +1,6 @@
 import { CONFIG, DEFAULT_SETTINGS, DEV_BUILD, normalizeCode, inviteUrl, eventUrl, categoryName, WORLD_ORIGIN } from "../config.js";
 import { SORTS, SCORE_WEIGHTS, scoreParts, historyFor, marketLabel } from "../lib/analytics.js";
-import { drawCard, shareText } from "./share.js";
+import { drawCard, shareText, FORMATS } from "./share.js";
 
 const $ = (s) => document.querySelector(s);
 const send = (msg) => chrome.runtime.sendMessage(msg);
@@ -1094,13 +1094,34 @@ function shareSheet(s) {
     data.link = eventUrl(s.signal.eventTicker);
   }
   data.invite = data.link;
+  data.format = prefs.shareFormat || "landscape";
   const canvas = drawCard(document.createElement("canvas"), data);
+  const formatSwitch = h(
+    "div",
+    { class: "seg share-format", role: "group", "aria-label": "Image size" },
+    ...Object.entries(FORMATS).map(([id, f]) =>
+      h(
+        "button",
+        {
+          "aria-pressed": String(data.format === id),
+          title: f.label,
+          onclick: () => {
+            prefs.shareFormat = id;
+            savePrefs();
+            renderSheet(true);
+          },
+        },
+        id === "square" ? "Square" : "Landscape",
+      ),
+    ),
+  );
   const text = shareText(data);
   const blob = () => new Promise((res) => canvas.toBlob(res, "image/png"));
   const intent = `https://x.com/intent/post?${new URLSearchParams({ text, url: data.link })}`;
   return [
     sheetHead("Share", "Every share carries your invite link."),
-    h("img", { class: "share-preview", src: canvas.toDataURL("image/png"), alt: text }),
+    h("div", { class: "share-top" }, formatSwitch, h("span", { class: "faint num" }, `${canvas.width}×${canvas.height}`)),
+    h("img", { class: `share-preview ${data.format}`, src: canvas.toDataURL("image/png"), alt: text }),
     h("p", { class: "share-text" }, text),
     h(
       "div",
@@ -1127,7 +1148,7 @@ function shareSheet(s) {
           class: "btn lg",
           onclick: async () => {
             const url = URL.createObjectURL(await blob());
-            const a = h("a", { href: url, download: `world-terminal-${(s.ticker || s.signal?.eventTicker || "signal").toLowerCase()}.png` });
+            const a = h("a", { href: url, download: `world-terminal-${(s.ticker || s.signal?.eventTicker || "signal").toLowerCase()}-${data.format}.png` });
             document.body.append(a);
             a.click();
             a.remove();

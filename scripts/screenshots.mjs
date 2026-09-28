@@ -73,6 +73,12 @@ async function seed(p, { pro }) {
   await p.waitForTimeout(600);
 }
 
+// Saves the share card at its real resolution (the preview <img> holds the canvas data URL).
+const saveCard = async (p, name) => {
+  const src = await p.locator(".share-preview").getAttribute("src");
+  writeFileSync(join(raw, `${name}.png`), Buffer.from(src.split(",")[1], "base64"));
+};
+
 const shot = async (p, name) => {
   await p.screenshot({ path: join(raw, `${name}.png`) });
   if (process.env.DEBUG_SHOTS) console.log("shot", name);
@@ -102,18 +108,32 @@ await shot(p, "detail");
 await p.click("text=Share");
 await p.waitForTimeout(500);
 await shot(p, "share-market");
-await p.locator(".share-preview").screenshot({ path: join(raw, "card-market.png") });
+await saveCard(p, "card-market");
+await p.click(".share-format >> text=Square");
+await p.waitForTimeout(400);
+await saveCard(p, "card-market-square");
+await p.click(".share-format >> text=Landscape");
+await p.waitForTimeout(300);
 await p.keyboard.press("Escape");
 await p.click('[data-tab="signals"]');
 await p.waitForTimeout(300);
 await shot(p, "signals");
 await p.locator(".s-share").first().click();
 await p.waitForTimeout(500);
-await p.locator(".share-preview").screenshot({ path: join(raw, "card-signal.png") });
+await saveCard(p, "card-signal");
+await p.click(".share-format >> text=Square");
+await p.waitForTimeout(400);
+await saveCard(p, "card-signal-square");
+await p.click(".share-format >> text=Landscape");
+await p.waitForTimeout(300);
 await p.keyboard.press("Escape");
 await p.click('#signal-chips .sig-tab:nth-child(4)');
 await p.waitForTimeout(300);
 await shot(p, "movers");
+await p.locator(".s-share").first().click();
+await p.waitForTimeout(500);
+await saveCard(p, "card-mover");
+await p.keyboard.press("Escape");
 await p.click('[data-tab="watch"]');
 await p.waitForTimeout(300);
 await shot(p, "watchlist");

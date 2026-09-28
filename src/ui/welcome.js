@@ -120,6 +120,13 @@ function stepWelcome() {
       h("button", { class: "btn primary xl", onclick: () => go(1) }, "Get started"),
       h("span", { class: "meta" }, "Takes about 2 minutes"),
     ),
+    h(
+      "div",
+      { class: "trust" },
+      h("span", {}, icon("shield"), "Read-only"),
+      h("span", {}, icon("wallet"), "Never asks for keys"),
+      h("span", {}, icon("crown"), "Pro free with invite"),
+    ),
   ];
 }
 
@@ -298,13 +305,58 @@ function stepPersonalize() {
   ];
 }
 
+// A short, tasteful confetti burst when setup is complete.
+let celebrated = false;
+function confetti() {
+  if (celebrated || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  celebrated = true;
+  const cv = document.getElementById("confetti");
+  const ctx = cv.getContext("2d");
+  const dpr = devicePixelRatio || 1;
+  cv.width = innerWidth * dpr;
+  cv.height = innerHeight * dpr;
+  ctx.scale(dpr, dpr);
+  const colors = ["#3dd68c", "#7c9cff", "#f5e2a8", "#c9a45c", "#edeff2", "#a9bcff"];
+  const origin = document.querySelector(".done-mark")?.getBoundingClientRect();
+  const ox = origin ? origin.left + origin.width / 2 : innerWidth * 0.3;
+  const oy = origin ? origin.top + origin.height / 2 : innerHeight * 0.3;
+  const parts = Array.from({ length: 140 }, () => {
+    const a = Math.random() * Math.PI * 2;
+    const v = 4 + Math.random() * 9;
+    return { x: ox, y: oy, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 6, w: 5 + Math.random() * 6, h: 8 + Math.random() * 8, r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.3, c: colors[(Math.random() * colors.length) | 0] };
+  });
+  const start = performance.now();
+  const frame = (t) => {
+    const k = (t - start) / 2200;
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    for (const p of parts) {
+      p.vy += 0.28;
+      p.vx *= 0.985;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.r += p.vr;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - k);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.r);
+      ctx.fillStyle = p.c;
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+    }
+    if (k < 1) requestAnimationFrame(frame);
+    else ctx.clearRect(0, 0, innerWidth, innerHeight);
+  };
+  requestAnimationFrame(frame);
+}
+
 function stepFinish() {
+  setTimeout(confetti, 350);
   const openPanel = () => {
     if (st.tabId !== null) chrome.sidePanel.open({ tabId: st.tabId }).catch(() => {});
   };
   return [
     h("div", { class: "done-mark" }, icon("check")),
-    h("div", { class: "eyebrow" }, "Last step"),
+    h("div", { class: "eyebrow" }, "You're all set"),
     h("h2", {}, "Pin it and you're ready"),
     h("p", { class: "lede" }, "Click the puzzle icon in Chrome's toolbar, then the pin next to World Terminal, so it's always one click away."),
     h(

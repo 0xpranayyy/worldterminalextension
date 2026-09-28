@@ -3,8 +3,8 @@
 
 const W = 1200;
 const H = 630;
-const FONT = '"Inter", "SF Pro Display", -apple-system, "Segoe UI", system-ui, sans-serif';
-const MONO = '"SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace';
+const FONT = '"WT Inter", "Inter", "SF Pro Display", -apple-system, "Segoe UI", system-ui, sans-serif';
+const MONO = '"WT Mono", "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace';
 
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();

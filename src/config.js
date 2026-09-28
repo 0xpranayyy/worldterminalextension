@@ -35,6 +35,13 @@ export const DEFAULT_SETTINGS = {
   rpcUrl: "https://api.mainnet-beta.solana.com",
 };
 
+// Display names for category slugs; anything else is title-cased.
+const CATEGORY_NAMES = { mma: "MMA", ufc: "UFC", nfl: "NFL", nba: "NBA", nhl: "NHL", mlb: "MLB", mls: "MLS", atp: "ATP", wta: "WTA", ncaa: "NCAA", ncaafb: "NCAA Football", epl: "Premier League", f1: "F1" };
+export function categoryName(slug) {
+  const s = String(slug || "").toLowerCase();
+  return CATEGORY_NAMES[s] || s.replace(/[-_]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
 export const WORLD_ORIGIN = "https://world.xyz";
 export const MARKETS_API = "https://markets-api-proxy.world-xyz.workers.dev/api/v1";
 export const USERS_API = "https://users-api.world.xyz/api/v1";

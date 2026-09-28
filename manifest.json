@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "World Terminal — Market Scanner for world.xyz",
   "short_name": "World Terminal",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Find the most liquid world.xyz prediction markets, spot arbitrage and closing favorites, and get price alerts.",
   "minimum_chrome_version": "116",
   "action": {
@@ -55,5 +55,15 @@
       },
       "description": "Open World Terminal"
     }
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/fonts/*.woff2"
+      ],
+      "matches": [
+        "https://world.xyz/*"
+      ]
+    }
+  ]
 }

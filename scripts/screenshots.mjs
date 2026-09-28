@@ -125,10 +125,39 @@ await p.keyboard.press("Escape");
 await p.click('[data-tab="markets"]');
 await p.close();
 
-// ---- Welcome ----
-p = await page("welcome.html", { width: 1280, height: 800 });
-await p.waitForTimeout(400);
-await shot(p, "welcome");
+// ---- Onboarding wizard (free user, World connected) ----
+p = await page("welcome.html", { width: 1440, height: 900 });
+await seed(p, { pro: false });
+await p.evaluate(() => chrome.storage.local.set({ onboarding: { step: 0, maxStep: 0, completed: false } }));
+await p.reload();
+await p.waitForTimeout(1200);
+await shot(p, "onboarding-1-welcome");
+await p.click("text=Get started");
+await p.waitForTimeout(1200);
+await shot(p, "onboarding-2-connect");
+await p.click(".panel >> text=Continue");
+await p.waitForTimeout(900);
+await shot(p, "onboarding-3-pro");
+await p.click("text=Skip · stay on Free");
+await p.waitForTimeout(700);
+await p.click(".pick button:nth-child(1)");
+await p.click(".pick button:nth-child(3)");
+await p.waitForTimeout(300);
+await shot(p, "onboarding-4-personalize");
+await p.click(".panel >> text=Continue");
+await p.waitForTimeout(900);
+await shot(p, "onboarding-5-finish");
+await p.setViewportSize({ width: 900, height: 900 });
+await p.waitForTimeout(300);
+await shot(p, "onboarding-narrow");
+await p.close();
+
+// ---- Popup with setup unfinished ----
+p = await page("app.html");
+await seed(p, { pro: false });
+await p.evaluate(() => chrome.storage.local.set({ onboarding: { step: 2, maxStep: 2, completed: false } }));
+await p.waitForTimeout(600);
+await shot(p, "popup-setup");
 await p.close();
 
 // ---- Overlay on a stubbed world.xyz event page ----

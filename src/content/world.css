@@ -1,10 +1,22 @@
+@font-face {
+  font-family: "WT Inter";
+  src: url("chrome-extension://__MSG_@@extension_id__/src/fonts/inter.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "WT Mono";
+  src: url("chrome-extension://__MSG_@@extension_id__/src/fonts/jetbrains-mono.woff2") format("woff2");
+  font-weight: 100 800;
+  font-display: swap;
+}
 .wt-panel {
   position: fixed; right: 16px; bottom: 16px; z-index: 2147483000; width: 330px; max-height: 62vh;
   display: flex; flex-direction: column; overflow: hidden; border-radius: 14px;
   background: rgba(14, 16, 19, 0.92); color: #edeff2; border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 18px 50px rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2);
-  font: 12px/1.45 "Inter", "SF Pro Text", -apple-system, "Segoe UI", system-ui, sans-serif;
+  font: 12px/1.45 "WT Inter", "Inter", "SF Pro Text", -apple-system, "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased; animation: wt-rise 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 @keyframes wt-rise { from { transform: translateY(10px); opacity: 0; } }
@@ -17,7 +29,7 @@
 }
 .wt-head:focus-visible { outline: 2px solid #7c9cff; outline-offset: -2px; border-radius: 14px; }
 .wt-brand { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 12.5px; letter-spacing: -0.01em; flex: 1; white-space: nowrap; }
-.wt-pill { font: 600 10.5px/1 "SF Mono", ui-monospace, Menlo, monospace; padding: 4px 7px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.14); color: #a3aab4; }
+.wt-pill { font: 600 10.5px/1 "WT Mono", "SF Mono", ui-monospace, Menlo, monospace; padding: 4px 7px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.14); color: #a3aab4; }
 .wt-pill.wt-gold { background: linear-gradient(135deg, #f5e2a8, #c9a45c); color: #1d1606; border-color: transparent; font-family: inherit; font-weight: 700; letter-spacing: 0.08em; }
 .wt-caret { color: #6a727e; font-size: 11px; }
 .wt-body { padding: 0 12px 12px; overflow: auto; }
@@ -31,7 +43,7 @@
 .wt-table th:first-child { text-align: left; }
 .wt-table td { text-align: right; padding: 6px 4px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
 .wt-name { text-align: left !important; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.wt-n { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.wt-n { font-family: "WT Mono", "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
 .wt-liq { white-space: nowrap; }
 .wt-bar { display: inline-block; width: 34px; height: 5px; border-radius: 5px; background: rgba(255, 255, 255, 0.08); overflow: hidden; vertical-align: middle; margin-right: 6px; }
 .wt-bar span { display: block; height: 100%; border-radius: 5px; }

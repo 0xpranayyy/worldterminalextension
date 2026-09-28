@@ -36,7 +36,10 @@ async function scheduleAlarm() {
 
 chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   await scheduleAlarm();
-  if (reason === "install") chrome.tabs.create({ url: chrome.runtime.getURL("src/ui/welcome.html") });
+  if (reason === "install") {
+    await store.set({ onboarding: { step: 0, maxStep: 0, completed: false } });
+    chrome.tabs.create({ url: chrome.runtime.getURL("src/ui/welcome.html") });
+  }
   refresh().catch(() => {});
 });
 
@@ -51,8 +54,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes.settings) {
     // Only settings that change what we fetch or compute need a rescan.
     const DATA_KEYS = ["refreshMinutes", "minEdgeCents", "favoriteMinCents", "favoriteMaxHours", "moverCents"];
-    const before = changes.settings.oldValue || {};
-    const after = changes.settings.newValue || {};
+    // Compare with defaults filled in, so the first save of an unchanged value isn't a "change".
+    const before = { ...DEFAULT_SETTINGS, ...(changes.settings.oldValue || {}) };
+    const after = { ...DEFAULT_SETTINGS, ...(changes.settings.newValue || {}) };
     if (DATA_KEYS.some((k) => before[k] !== after[k])) {
       scheduleAlarm();
       refresh().catch(() => {});

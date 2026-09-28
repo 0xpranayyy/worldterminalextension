@@ -1,11 +1,16 @@
-import { CONFIG, DEFAULT_SETTINGS, DEV_BUILD, normalizeCode, inviteUrl, eventUrl, WORLD_ORIGIN } from "../config.js";
+import { CONFIG, DEFAULT_SETTINGS, DEV_BUILD, normalizeCode, inviteUrl, eventUrl, categoryName, WORLD_ORIGIN } from "../config.js";
 import { SORTS, SCORE_WEIGHTS, scoreParts, historyFor, marketLabel } from "../lib/analytics.js";
 import { drawCard, shareText } from "./share.js";
 
 const $ = (s) => document.querySelector(s);
 const send = (msg) => chrome.runtime.sendMessage(msg);
 
+// Canvas share cards need the bundled fonts loaded before drawing.
+for (const f of ['400 16px "WT Inter"', '700 16px "WT Inter"', '800 16px "WT Inter"', '600 16px "WT Mono"', '800 16px "WT Mono"']) document.fonts.load(f).catch(() => {});
+
 const isPopup = chrome.extension.getViews({ type: "popup" }).includes(window);
+// Embedded as the live preview inside the onboarding page.
+const isEmbedded = window.top !== window;
 if (!isPopup) document.body.classList.add("panel");
 
 const prefs = (() => {
@@ -155,6 +160,19 @@ function renderKpis() {
 
 function renderBanner() {
   const b = $("#banner");
+  const ob = state.onboarding;
+  if (ob && !ob.completed && !isEmbedded) {
+    b.replaceChildren(
+      h(
+        "div",
+        { class: "banner setup" },
+        h("div", { class: "setup-ring", style: `--p:${Math.round(((ob.maxStep || 0) / 5) * 100)}` }, h("span", {}, `${Math.min(5, (ob.maxStep || 0) + 1)}/5`)),
+        h("div", { class: "banner-text" }, h("b", {}, "Finish setting up"), "Connect World, unlock Pro and pick your markets."),
+        h("button", { class: "btn primary", onclick: () => chrome.tabs.create({ url: chrome.runtime.getURL("src/ui/welcome.html") }) }, "Continue"),
+      ),
+    );
+    return;
+  }
   if (state.loaded && (!state.status || state.status.state === "auth")) {
     b.replaceChildren(
       h(
@@ -227,7 +245,8 @@ const QUICK = [
 function renderChips() {
   const cats = new Map();
   for (const r of state.rows) if (r.category) cats.set(r.category, (cats.get(r.category) || 0) + 1);
-  const top = [...cats.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const fav = new Set(state.settings.favoriteCategories || []);
+  const top = [...cats.entries()].sort((a, b) => fav.has(b[0]) - fav.has(a[0]) || b[1] - a[1]).slice(0, 8);
   const chip = (id, label, n) =>
     h(
       "button",
@@ -245,7 +264,7 @@ function renderChips() {
     );
   $("#chips").replaceChildren(
     ...QUICK.map((q) => chip(q.id, q.label)),
-    ...top.map(([c, n]) => chip(`cat:${c}`, c.replace(/(^|[-_\s])\w/g, (m) => m.toUpperCase()).replace(/[-_]/g, " "), n)),
+    ...top.map(([c, n]) => chip(`cat:${c}`, categoryName(c), n)),
   );
 }
 
@@ -1198,7 +1217,7 @@ function renderAll() {
 
 async function load() {
   const [data, unlock] = await Promise.all([
-    chrome.storage.local.get(["rows", "opportunities", "status", "watchlist", "alerts", "settings", "snapshots", "auth"]),
+    chrome.storage.local.get(["rows", "opportunities", "status", "watchlist", "alerts", "settings", "snapshots", "auth", "onboarding"]),
     send({ type: "unlockState" }).catch(() => null),
   ]);
   Object.assign(state, {
@@ -1207,6 +1226,7 @@ async function load() {
     opportunities: data.opportunities || null,
     status: data.status || null,
     auth: data.auth || null,
+    onboarding: data.onboarding || null,
     watchlist: data.watchlist || [],
     alerts: data.alerts || [],
     snapshots: data.snapshots || [],
@@ -1221,7 +1241,7 @@ async function load() {
 let pending;
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
-  if (!["rows", "opportunities", "status", "watchlist", "alerts", "unlock", "settings", "auth"].some((k) => k in changes)) return;
+  if (!["rows", "opportunities", "status", "watchlist", "alerts", "unlock", "settings", "auth", "onboarding"].some((k) => k in changes)) return;
   clearTimeout(pending);
   pending = setTimeout(load, 60);
 });

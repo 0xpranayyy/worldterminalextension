@@ -97,7 +97,9 @@ try {
   await app.setViewportSize({ width: 400, height: 600 });
   await app.goto(`chrome-extension://${extId}/src/ui/app.html`);
   // Pretend the user opened world.xyz: give the extension a World session token.
-  await app.evaluate(() => chrome.storage.local.set({ auth: { token: "world-session", expiry: Date.now() + 3600e3 } }));
+  await app.evaluate(() =>
+    chrome.storage.local.set({ auth: { token: "world-session", expiry: Date.now() + 3600e3 }, onboarding: { step: 4, maxStep: 4, completed: true } }),
+  );
 
   await check("free user gets the backend's top 10 via /v1/feed", async () => {
     await app.click("#btn-refresh");

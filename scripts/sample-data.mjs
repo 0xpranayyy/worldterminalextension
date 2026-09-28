@@ -93,6 +93,8 @@ export function sampleState(now = Date.now()) {
     snap.mids["WXFED-CUT"] = +(snap.mids["WXFED-CUT"] - 0.09 * k).toFixed(4);
     snap.mids["WXETH-4500"] = +(snap.mids["WXETH-4500"] + 0.07 * k).toFixed(4);
   }
+  const moves = {};
+  for (const r of rows) if (r.mid != null && typeof base.mids[r.ticker] === "number") moves[r.ticker] = +(r.mid - base.mids[r.ticker]).toFixed(4);
   const opportunities = {
     underround: findUnderround(events),
     complement: findComplementArb(rows),
@@ -102,6 +104,7 @@ export function sampleState(now = Date.now()) {
   };
   return {
     rows,
+    moves,
     snapshots,
     opportunities,
     status: {

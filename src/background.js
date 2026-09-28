@@ -243,7 +243,11 @@ async function commit(rows, opportunities, status) {
     if (settings.notifyAlerts) for (const f of fired) notifyAlert(f);
   }
   if ((await isUnlocked()) && settings.notifySignals) await notifyNewSignals(opportunities);
-  await store.set({ rows, opportunities, status, ...(historyChanged ? { snapshots: kept } : {}) });
+  // Hourly change per market, small enough for the world.xyz panel to read on every render.
+  const base = [...kept].reverse().find((x) => now - x.t >= 55 * 60 * 1000) || kept[0];
+  const moves = {};
+  if (base && base.t < now) for (const r of rows) if (r.mid != null && typeof base.mids[r.ticker] === "number") moves[r.ticker] = +(r.mid - base.mids[r.ticker]).toFixed(4);
+  await store.set({ rows, opportunities, status, moves, ...(historyChanged ? { snapshots: kept } : {}) });
 }
 
 // ---------- Notifications & badge ----------

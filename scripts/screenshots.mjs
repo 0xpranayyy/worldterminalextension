@@ -73,7 +73,10 @@ async function seed(p, { pro }) {
   await p.waitForTimeout(600);
 }
 
-const shot = (p, name) => p.screenshot({ path: join(raw, `${name}.png`) });
+const shot = async (p, name) => {
+  await p.screenshot({ path: join(raw, `${name}.png`) });
+  if (process.env.DEBUG_SHOTS) console.log("shot", name);
+};
 
 // ---- Free plan ----
 let p = await page("app.html");
@@ -173,7 +176,12 @@ await p.waitForTimeout(600);
 await shot(p, "popup-setup");
 await p.close();
 
-// ---- Overlay on a stubbed world.xyz event page ----
+// ---- Overlay on a stubbed world.xyz event page (Pro) ----
+p = await page("app.html");
+await seed(p, { pro: true });
+await p.evaluate(() => chrome.storage.local.set({ onboarding: { completed: true } }));
+await p.close();
+if (process.env.DEBUG_SHOTS) console.log("overlay: start");
 p = await ctx.newPage();
 p.on("pageerror", (e) => errors.push(`overlay: ${e.message}`));
 await p.setViewportSize({ width: 1280, height: 800 });
@@ -188,14 +196,28 @@ await p.route("https://world.xyz/**", (route) =>
   }),
 );
 await p.goto("https://world.xyz/event/WXEPL-2627-WIN");
-await p.waitForSelector(".wt-panel", { timeout: 5000 });
-await p.waitForTimeout(600);
+await p.waitForSelector("world-terminal-panel", { timeout: 5000 });
+await p.waitForTimeout(900);
 await p.screenshot({ path: join(raw, "overlay.png") });
+if (process.env.DEBUG_SHOTS) console.log("overlay: pro shot");
+{
+  // Collapsed and free states: flip storage from an extension page, the panel re-renders itself.
+  const ctl = await ctx.newPage();
+  await ctl.goto(url("app.html"));
+  await ctl.evaluate(() => chrome.storage.local.set({ wtOverlayCollapsed: true }));
+  await p.bringToFront();
+  await p.waitForTimeout(800);
+  await p.screenshot({ path: join(raw, "overlay-collapsed.png") });
+  await ctl.evaluate(async () => {
+    await chrome.storage.local.set({ wtOverlayCollapsed: false });
+    await chrome.storage.local.remove("unlock");
+  });
+  await p.bringToFront();
+  await p.waitForTimeout(800);
+  await p.screenshot({ path: join(raw, "overlay-free.png") });
+  await ctl.close();
+}
 await p.close();
-
-await ctx.close();
-rmSync(profile, { recursive: true, force: true });
-rmSync(ext, { recursive: true, force: true });
 
 // ---- 1280×800 store images (the store requires exactly this size, so render at 1×) ----
 const browser = await chromium.launch({ executablePath, headless: true });
@@ -224,9 +246,11 @@ for (const [name, src, title, sub] of frames) {
   await p.screenshot({ path: join(out, "05-overlay.png") });
 }
 await browser.close();
+rpc.closeAllConnections?.();
 rpc.close();
 if (errors.length) {
   console.error("Page errors:\n" + errors.join("\n"));
   process.exit(1);
 }
 console.log(`Screenshots written to ${out}`);
+process.exit(0);
